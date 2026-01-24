@@ -1,26 +1,13 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from io import BytesIO
 
-# 1. CONFIGURACIÓN Y ESTILO (Colores Power BI)
+# 1. CONFIGURACIÓN
 st.set_page_config(layout="wide", page_title="Dashboard PET")
 
 MAGENTA = "#b5006a"
 AZUL_BI = "#002d5a"
-
-st.markdown(f"""
-    <style>
-    .main {{ background-color: #f4f7f9; }}
-    [data-testid="stSidebar"] {{ background-color: {AZUL_BI}; color: white; }}
-    .metric-card {{
-        background-color: white; padding: 20px; border-radius: 5px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.1); text-align: center;
-        border: 2px solid {MAGENTA}; margin-bottom: 20px;
-    }}
-    .stButton > button {{ width: 100%; text-align: left; background-color: transparent; color: white; border: none; padding: 10px; }}
-    .stButton > button:hover {{ background-color: {MAGENTA}; }}
-    </style>
-    """, unsafe_allow_html=True)
 
 @st.cache_data
 def load_data():
@@ -36,87 +23,73 @@ def load_data():
 
 df_master = load_data()
 
-# 2. NAVEGACIÓN
+# NAVEGACIÓN
 if 'pagina' not in st.session_state:
     st.session_state.pagina = "Analisis"
 
 with st.sidebar:
-    st.markdown("## Inventario PET")
-    if st.button("📈 Análisis de Inventario"):
-        st.session_state.pagina = "Analisis"
-    if st.button("📁 Inventario por Almacén"):
-        st.session_state.pagina = "Inventario"
-    st.divider()
-    if st.button("🔄 Resetear Todo"):
-        st.rerun()
+    st.title("Logística PET")
+    if st.button("📈 Análisis de Inventario"): st.session_state.pagina = "Analisis"
+    if st.button("📁 Detalle por Almacén"): st.session_state.pagina = "Inventario"
+    if st.button("🔄 Resetear"): st.rerun()
 
-# 3. PÁGINA: ANÁLISIS
+# --- PÁGINA ANÁLISIS ---
 if st.session_state.pagina == "Analisis":
-    st.subheader("Haz clic en un Canal para filtrar todo el tablero")
+    st.write("### Selecciona un Canal para filtrar todo")
+    
+    # 1. EL TREEMAP (FILTRO MAESTRO)
+    fig_tree = px.treemap(df_master, path=['Canal'], values='Total',
+                          color='Canal', color_discrete_map={
+                              'Tradicional PET': '#e91e63', 'Changarro': '#0d47a1',
+                              'Multicanal PET': '#7b1fa2', 'Autoservicio PET': '#2196f3'
+                          })
+    
+    # Capturamos la selección
+    seleccion = st.plotly_chart(fig_tree, use_container_width=True, on_select="rerun", key="tree_click")
 
-    col_izq, col_der = st.columns([2, 1])
-
-    with col_izq:
-        fig_tree = px.treemap(df_master, path=['Canal'], values='Total',
-                             color='Canal', color_discrete_map={
-                                 'Tradicional PET': '#e91e63', 'Changarro': '#0d47a1',
-                                 'Multicanal PET': '#7b1fa2', 'Autoservicio PET': '#2196f3'
-                             })
-        # Captura de selección (on_select="rerun")
-        seleccion = st.plotly_chart(fig_tree, use_container_width=True, on_select="rerun", key="tree_master")
-
-    # Lógica de Filtrado Dinámico
+    # 2. LÓGICA DE FILTRADO (EL CEREBRO)
     df_f = df_master.copy()
-    titulo_kpi = "Total General"
+    canal_txt = "Total Global"
 
+    # Verificamos si realmente hubo un clic válido
     if seleccion and "selection" in seleccion and seleccion["selection"]["points"]:
-        canal_detectado = seleccion["selection"]["points"][0].get("label")
-        if canal_detectado:
-            df_f = df_master[df_master['Canal'] == canal_detectado]
-            titulo_kpi = f"Total {canal_detectado}"
+        puntos = seleccion["selection"]["points"]
+        if len(puntos) > 0:
+            # Intentamos obtener el label del punto seleccionado
+            canal_detectado = puntos[0].get("label")
+            if canal_detectado:
+                df_f = df_master[df_master['Canal'] == canal_detectado]
+                canal_txt = f"Canal: {canal_detectado}"
 
-    with col_der:
-        total_p = df_f['Total'].sum()
+    # 3. VISUALES DINÁMICOS
+    c_kpi, c_filt = st.columns([1, 1])
+    with c_kpi:
         st.markdown(f"""
-            <div class="metric-card">
-                <p style="color: {AZUL_BI}; margin:0; font-weight:bold;">{titulo_kpi}</p>
-                <h1 style="color: {MAGENTA}; font-size: 50px; margin:0;">{total_p:,.0f}</h1>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Filtros adicionales
-        camp_sel = st.multiselect("Filtrar Campaña", options=df_f['Campaña'].unique(), default=df_f['Campaña'].unique())
+            <div style="background: white; padding: 20px; border: 2px solid {MAGENTA}; text-align: center; border-radius: 10px;">
+                <p style="color: {AZUL_BI}; margin:0; font-weight:bold;">{canal_txt}</p>
+                <h1 style="color: {MAGENTA}; font-size: 50px; margin:0;">{df_f['Total'].sum():,.0f}</h1>
+            </div>""", unsafe_allow_html=True)
+    
+    with c_filt:
+        camp_sel = st.multiselect("Campaña", df_f['Campaña'].unique(), default=df_f['Campaña'].unique())
         df_f = df_f[df_f['Campaña'].isin(camp_sel)]
 
-    # Fila 2: Ranking y Mapa DINÁMICOS
-    c_rank, c_map = st.columns([1, 1.5])
-    with c_rank:
-        st.write("### Ranking Almacén")
-        resumen = df_f.groupby('Estado')['Total'].sum().sort_values(ascending=False).reset_index()
-        st.dataframe(resumen, hide_index=True, use_container_width=True, height=350)
+    c1, c2 = st.columns([1, 1.5])
+    with c1:
+        st.write("### Top Almacenes")
+        ranking = df_f.groupby('Estado')['Total'].sum().sort_values(ascending=False).reset_index()
+        st.dataframe(ranking, hide_index=True, use_container_width=True)
     
-    with c_map:
-        st.write("### Mapa de Distribución")
-        resumen_geo = df_f.dropna(subset=['lat']).groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
-        fig_map = px.scatter_mapbox(resumen_geo, lat="lat", lon="lon", size="Total", color="Total",
-                                   color_continuous_scale='Blues', size_max=25, zoom=3.5, mapbox_style="carto-positron")
+    with c2:
+        st.write("### Mapa de Stock")
+        geo = df_f.dropna(subset=['lat']).groupby(['Estado','lat','lon'])['Total'].sum().reset_index()
+        fig_map = px.scatter_mapbox(geo, lat="lat", lon="lon", size="Total", color="Total",
+                                   color_continuous_scale='Blues', zoom=3.5, mapbox_style="carto-positron")
         fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=350)
         st.plotly_chart(fig_map, use_container_width=True)
 
-# 4. PÁGINA: INVENTARIO POR ALMACÉN
 else:
-    st.header("Inventario por Almacén")
-    f1, f2, f3 = st.columns(3)
-    with f1:
-        alm_sel = st.multiselect("Almacén", options=sorted(df_master['Estado'].unique()), default=df_master['Estado'].unique())
-    with f2:
-        can_sel = st.multiselect("Canal", options=df_master['Canal'].unique(), default=df_master['Canal'].unique())
-    with f3:
-        search = st.text_input("Buscador", placeholder="Descripción o SKU...")
-
-    df_tab = df_master[(df_master['Estado'].isin(alm_sel)) & (df_master['Canal'].isin(can_sel))]
-    if search:
-        df_tab = df_tab[df_tab['Descripción'].str.contains(search, case=False)]
-
-    st.dataframe(df_tab[['código', 'Descripción', 'Campaña', 'Estado', 'Canal', 'Total']], use_container_width=True, height=600)
+    # PÁGINA INVENTARIO
+    st.header("Detalle por Almacén")
+    st.dataframe(df_master, use_container_width=True)
     
