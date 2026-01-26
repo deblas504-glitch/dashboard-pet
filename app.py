@@ -2,17 +2,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Configuración de página
-st.set_page_config(layout="wide", page_title="Control PET")
+# 1. CONFIGURACIÓN
+st.set_page_config(layout="wide", page_title="Dashboard PET Interactivo")
 
-# Conexión a tu Google Sheets
+# COLORES
+MAGENTA = "#b5006a"
+
+# 2. CONEXIÓN A GOOGLE SHEETS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    # Blindaje de coordenadas para el mapa
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat': [21.8823, 30.8406, 26.0444, 19.8301, 16.7569, 28.6330, 19.4326, 27.0587, 19.2433, 24.0277, 19.3562, 21.0190, 17.4392, 20.0911, 20.6597, 19.7008, 18.9220, 21.5095, 25.6866, 17.0732, 19.0414, 20.5888, 19.1817, 22.1565, 24.8091, 29.0730, 17.8409, 23.7369, 19.3181, 19.1738, 20.9674, 22.7709],
@@ -23,33 +25,51 @@ def load_data():
 
 df_master = load_data()
 
-# --- FILTRO MANUAL (Para asegurar que funcione) ---
-st.markdown("### Filtro de Canal")
-canal_sel = st.selectbox("Elige un Canal:", ["Ver Todo"] + list(df_master['Canal'].unique()))
+# --- INTERFAZ ---
+st.title("📦 Control Logístico PET")
 
-# Lógica de Filtrado
+# EL TREEMAP (FILTRO MAESTRO)
+fig_tree = px.treemap(df_master, path=['Canal'], values='Total', 
+                      color='Canal', color_discrete_sequence=px.colors.qualitative.Pastel)
+
+# Guardamos la selección del gráfico
+seleccion = st.plotly_chart(fig_tree, use_container_width=True, on_select="rerun", key="main_tree")
+
+# LÓGICA DE FILTRADO INTELIGENTE
 df_f = df_master.copy()
-if canal_sel != "Ver Todo":
-    df_f = df_master[df_master['Canal'] == canal_sel]
+canal_final = "Global"
 
-# --- VISUALIZACIÓN ---
+# 1. Prioridad: ¿Hizo clic en el Treemap?
+if seleccion and "selection" in seleccion and seleccion["selection"]["points"]:
+    label = seleccion["selection"]["points"][0].get("label")
+    if label:
+        df_f = df_master[df_master['Canal'] == label]
+        canal_final = label
+# 2. Si no hay clic, revisamos el selector de lista (por seguridad)
+else:
+    canal_list = st.selectbox("O selecciona aquí si el clic falla:", ["Todos"] + list(df_master['Canal'].unique()))
+    if canal_list != "Todos":
+        df_f = df_master[df_master['Canal'] == canal_list]
+        canal_final = canal_list
+
+# --- RESULTADOS ---
 c1, c2 = st.columns([1, 2])
 
 with c1:
-    total = df_f['Total'].sum()
     st.markdown(f"""
-        <div style="background:#b5006a; color:white; padding:20px; border-radius:10px; text-align:center;">
-            <h3>Total {canal_sel}</h3>
-            <h1 style="font-size:50px;">{total:,.0f}</h1>
+        <div style="background:{MAGENTA}; color:white; padding:20px; border-radius:10px; text-align:center;">
+            <h3>Total {canal_final}</h3>
+            <h1 style="font-size:55px;">{df_f['Total'].sum():,.0f}</h1>
         </div>""", unsafe_allow_html=True)
     
-    st.write("#### Ranking")
+    st.write("#### Ranking Estados")
     st.dataframe(df_f.groupby('Estado')['Total'].sum().sort_values(ascending=False), use_container_width=True)
 
 with c2:
-    st.write("#### Mapa de Stock")
+    st.write("#### Ubicación en Mapa")
     geo = df_f.dropna(subset=['lat']).groupby(['Estado','lat','lon'])['Total'].sum().reset_index()
     fig_map = px.scatter_mapbox(geo, lat="lat", lon="lon", size="Total", color="Total",
-                               color_continuous_scale='Blues', zoom=3.5, mapbox_style="carto-positron")
+                               color_continuous_scale='Blues', zoom=3.8, mapbox_style="carto-positron")
     fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     st.plotly_chart(fig_map, use_container_width=True)
+    
