@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
-st.set_page_config(layout="wide", page_title="Dashboard Logística - Almacenes")
+st.set_page_config(layout="wide", page_title="Control PET - Almacenes")
 
 # Color corporativo
 MAGENTA = "#b5006a"
@@ -15,14 +15,16 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    # Limpieza de nombres para asegurar que los filtros no fallen
-    df['Almacen'] = df['Almacen'].astype(str).str.strip()
-    df['Canal'] = df['Canal'].astype(str).str.strip()
+    # Limpieza de la columna H ("Nombre") y Canal
+    if 'Nombre' in df.columns:
+        df['Nombre'] = df['Nombre'].astype(str).str.strip()
+    if 'Canal' in df.columns:
+        df['Canal'] = df['Canal'].astype(str).str.strip()
     return df
 
 df_master = load_data()
 
-# 3. INTERFAZ DE FILTROS (BOTONES)
+# 3. INTERFAZ DE FILTROS (BOTONES SUPERIORES)
 st.title("📦 Control de Inventario por Almacén")
 st.write("### Selecciona un Canal para filtrar:")
 
@@ -43,7 +45,7 @@ df_f = df_master.copy()
 if st.session_state.canal_activo != "Global":
     df_f = df_master[df_master['Canal'] == st.session_state.canal_activo]
 
-# 5. DASHBOARD EN DOS COLUMNAS
+# 5. DISTRIBUCIÓN DEL DASHBOARD EN DOS COLUMNAS
 col_datos, col_grafica = st.columns([1, 2])
 
 with col_datos:
@@ -56,35 +58,35 @@ with col_datos:
             <p style="margin:0; font-size: 14px;">Unidades Totales</p>
         </div>""", unsafe_allow_html=True)
     
-    st.write("#### Detalle por Almacén")
-    # Agrupamos por Almacén para la tabla
-    ranking_almacen = df_f.groupby('Almacen')['Total'].sum().sort_values(ascending=False).reset_index()
+    st.write("#### Inventario por Almacén")
+    # Agrupamos por la columna "Nombre" para la tabla
+    ranking_almacen = df_f.groupby('Nombre')['Total'].sum().sort_values(ascending=False).reset_index()
     st.dataframe(ranking_almacen, hide_index=True, use_container_width=True)
 
 with col_grafica:
     st.write(f"#### Volumetría por Almacén: {st.session_state.canal_activo}")
     
-    # Preparar datos para las burbujas (agrupado por Almacén)
-    df_bubble = df_f.groupby('Almacen')['Total'].sum().reset_index()
+    # Preparar datos para las burbujas agrupado por "Nombre"
+    df_bubble = df_f.groupby('Nombre')['Total'].sum().reset_index()
     
-    # GRÁFICO DE BURBUJAS POR ALMACÉN
+    # CREACIÓN DEL GRÁFICO DE BURBUJAS (Estilo Gapminder/Burbujas grandes)
     fig_bubble = px.scatter(
         df_bubble, 
-        x="Almacen", 
+        x="Nombre", 
         y="Total",
         size="Total", 
-        color="Almacen",
-        hover_name="Almacen", 
-        size_max=80,             # Burbujas grandes para impacto visual
-        template="plotly_dark",  # Estilo visual moderno
+        color="Nombre",
+        hover_name="Nombre", 
+        size_max=80,             # Tamaño máximo para que luzcan las burbujas
+        template="plotly_dark",  # Fondo oscuro para resaltar colores
     )
     
     fig_bubble.update_layout(
         margin={"r":10,"t":30,"l":10,"b":10},
         height=550,
         showlegend=False,        # Ocultamos leyenda porque los nombres están en el eje X
-        xaxis_title="Nombre del Almacén",
-        yaxis_title="Cantidad de Unidades",
+        xaxis_title="Nombre del Almacén (Columna H)",
+        yaxis_title="Unidades Totales",
         paper_bgcolor="rgba(0,0,0,0)",
     )
     
