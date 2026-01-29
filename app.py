@@ -78,7 +78,7 @@ if menu == "Análisis de Inventario":
         fig_bar.update_layout(showlegend=False, height=500, paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_bar, use_container_width=True)
 
-# 5. VISTA: TABLA DE INVENTARIO (SOLO COLUMNAS ESPECÍFICAS)
+# 5. VISTA: TABLA DE INVENTARIO (SOLO COLUMNAS ESPECÍFICAS + COLUMNA R)
 else:
     st.title("📋 Tabla Maestra de Inventario")
     
@@ -100,14 +100,27 @@ else:
     if sel_p != "Todas": df_tabla = df_tabla[df_tabla['Campaña'] == sel_p]
     if sel_l != "Todas": df_tabla = df_tabla[df_tabla['Clasificación'] == sel_l]
 
-    # SELECCIÓN ÚNICA DE COLUMNAS: C, D, E, H, I, J, K, L, Q
-    # Usamos los índices para extraer exactamente esas columnas
-    indices_deseados = [2, 3, 4, 7, 8, 9, 10, 11, 16]
-    columnas_finales = [df_master.columns[i] for i in indices_deseados]
+    # SELECCIÓN DE COLUMNAS: C, D, E, H, I, J, K, L, R, Total (Q)
+    # Definimos los índices exactos basados en tu estructura de Excel
+    indices_deseados = [
+        2,  # C
+        3,  # D
+        4,  # E
+        7,  # H
+        8,  # I
+        9,  # J
+        10, # K
+        11, # L
+        17, # R (Añadida antes del total)
+        16  # Q (Total)
+    ]
     
-    # Mostrar solo lo solicitado
+    # Extraemos nombres de columnas existentes para evitar errores de índice
+    columnas_finales = [df_master.columns[i] for i in indices_deseados if i < len(df_master.columns)]
+    
+    # Mostrar tabla limpia
     st.dataframe(df_tabla[columnas_finales], use_container_width=True, hide_index=True)
     
-    # Botón de Descarga solo con esas columnas
+    # Botón de Descarga
     csv = df_tabla[columnas_finales].to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Descargar Reporte Seleccionado", csv, "inventario_especifico.csv", "text/csv")
+    st.download_button("📥 Descargar Reporte Personalizado", csv, "inventario_r_total.csv", "text/csv")
