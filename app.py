@@ -3,23 +3,38 @@ import pandas as pd
 import plotly.express as px
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(layout="wide", page_title="Control PET - Dashboard Estratégico")
+st.set_page_config(layout="wide", page_title="Control PET - PVD Logística", page_icon="📊")
 
-# Paleta Corporativa y Estilos
+# Paleta Corporativa
 MAGENTA_M = "#b5006a"
 AZUL_MARS = "#002d5a"
 
+# 2. ESTILO CSS (Logo, Sidebar Azul y Tabla Proporcionada)
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #fcfcfc; }}
     [data-testid="stSidebar"] {{ background-color: {AZUL_MARS} !important; }}
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] label {{ color: white !important; }}
-    .stMetric {{ background-color: white; border-radius: 15px; border-left: 8px solid {MAGENTA_M}; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
-    .stSelectbox label {{ color: {AZUL_MARS} !important; font-weight: bold; }}
+    
+    /* Imagen del Logo en el Sidebar */
+    [data-testid="stSidebarNav"] {{
+        padding-top: 20px !important;
+    }}
+    
+    /* Estilo de métricas */
+    .stMetric {{ 
+        background-color: white; 
+        border-radius: 15px; 
+        border-left: 8px solid {MAGENTA_M}; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+    }}
+    
+    /* Ajuste de altura de tablas */
+    .stDataFrame {{ height: 450px !important; border-radius: 10px; }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS (GOOGLE SHEETS)
+# 3. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -37,16 +52,19 @@ def load_data():
 
 df_master = load_data()
 
-# 3. SIDEBAR
+# 4. SIDEBAR CON LOGO PVD
 with st.sidebar:
-    st.title("📂 Control PET")
-    menu = st.radio("Sección:", ["📊 Análisis 360", "📋 Tabla Maestra"])
+    # Insertamos el logo de la empresa
+    st.image("https://raw.githubusercontent.com/tu-usuario/tu-repo/main/logo_pvd.png", use_container_width=True) 
+    # Nota: Si lo corres localmente, usa el nombre del archivo: st.image("logo_pvd.png")
+    st.markdown("---")
+    menu = st.radio("Sección del Sistema:", ["📊 Análisis 360", "📋 Gestión de Inventario"])
 
-# 4. VISTA: ANÁLISIS 360
+# 5. VISTA: ANÁLISIS 360
 if menu == "📊 Análisis 360":
-    st.title("Visualización Estratégica Multicromática")
+    st.title("Centro de Control Logístico PVD")
     
-    # Filtros para el dashboard
+    # Filtros de Análisis
     a1, a2 = st.columns(2)
     with a1: ana_canal = st.selectbox("Seleccionar Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
     with a2: ana_campana = st.selectbox("Seleccionar Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
@@ -55,9 +73,9 @@ if menu == "📊 Análisis 360":
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    st.metric("Inventario Total Seleccionado", f"{df_ana['Total'].sum():,.0f} U")
+    st.metric("Inventario Total en Red", f"{df_ana['Total'].sum():,.0f} U")
 
-    # FILA DE 3 COLUMNAS
+    # FILA DE 3 COLUMNAS (Equilibrado)
     c1, c2, c3 = st.columns(3)
 
     with c1:
@@ -66,39 +84,36 @@ if menu == "📊 Análisis 360":
         fig_map = px.scatter_mapbox(df_mapa, lat="lat", lon="lon", size="Total", color="Estado",
                                     color_discrete_sequence=px.colors.qualitative.Prism, 
                                     size_max=25, zoom=3.0, mapbox_style="carto-positron")
-        fig_map.update_layout(height=450, margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
+        fig_map.update_layout(height=400, margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
         st.plotly_chart(fig_map, use_container_width=True)
 
     with c2:
-        st.write("#### 📈 Ranking por Almacén")
+        st.write("#### 📈 Ranking de Almacenes")
         df_bar = df_ana.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
         fig_bar = px.bar(df_bar, x="Total", y="Nombre", orientation='h', color="Nombre", 
-                         color_discrete_sequence=px.colors.qualitative.G10, 
-                         template="plotly_white", text_auto='.2s')
-        fig_bar.update_layout(height=450, showlegend=False)
+                         color_discrete_sequence=px.colors.qualitative.G10, template="plotly_white")
+        fig_bar.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with c3:
         st.write("#### 🫧 Campañas vs Canales")
-        # Agrupación por Campaña y Canal
         df_bubble = df_ana.groupby(['Campaña', 'Canal'])['Total'].sum().reset_index()
-        fig_bubble = px.scatter(
-            df_bubble, x="Campaña", y="Canal", size="Total", color="Campaña",
-            color_discrete_sequence=px.colors.qualitative.Vivid, 
-            size_max=50, template="plotly_white",
-            hover_data=['Total']
-        )
-        fig_bubble.update_layout(height=450, showlegend=False, margin={"r":0,"t":0,"l":0,"b":0})
+        fig_bubble = px.scatter(df_bubble, x="Campaña", y="Canal", size="Total", color="Campaña",
+                                color_discrete_sequence=px.colors.qualitative.Vivid, 
+                                size_max=50, template="plotly_white")
+        fig_bubble.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig_bubble, use_container_width=True)
 
-# 5. VISTA: TABLA MAESTRA
+# 6. VISTA: GESTIÓN DE INVENTARIO
 else:
-    st.title("Gestión de Inventario")
+    st.title("Inventario Maestro PVD Logística")
+    
+    # Filtros de Tabla
     f1, f2, f3, f4 = st.columns(4)
-    with f1: sel_c = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with f2: sel_a = st.selectbox("Almacén", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
-    with f3: sel_p = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
-    with f4: sel_l = st.selectbox("Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
+    with f1: sel_c = st.selectbox("Filtro Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    with f2: sel_a = st.selectbox("Filtro Almacén", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
+    with f3: sel_p = st.selectbox("Filtro Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    with f4: sel_l = st.selectbox("Filtro Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
 
     df_f = df_master.copy()
     if sel_c != "Todos": df_f = df_f[df_f['Canal'] == sel_c]
@@ -106,9 +121,10 @@ else:
     if sel_p != "Todas": df_f = df_f[df_f['Campaña'] == sel_p]
     if sel_l != "Todas": df_f = df_f[df_f['Clasificación'] == sel_l]
 
-    # Columnas específicas: Incluyendo R (17) antes de Total (16)
+    # Columnas con R (17) antes de Total (16)
     indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
     cols = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
-    st.dataframe(df_f[cols], use_container_width=True, hide_index=True, height=550)
     
-    st.download_button("📥 Descargar Reporte CSV", df_f[cols].to_csv(index=False).encode('utf-8'), "inventario_mars.csv", "text/csv")
+    st.dataframe(df_f[cols], use_container_width=True, hide_index=True, height=500)
+    
+    st.download_button("📥 Descargar Reporte Ejecutivo", df_f[cols].to_csv(index=False).encode('utf-8'), "reporte_pvd.csv", "text/csv")
