@@ -2,24 +2,24 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(layout="wide", page_title="Control PET - Dashboard 360")
+# 1. CONFIGURACIÓN
+st.set_page_config(layout="wide", page_title="Control PET - Espectacular")
 
-# Paleta Corporativa
-MAGENTA = "#b5006a"
+# Colores de Interfaz (Manteniendo el Magenta Corporativo en controles)
+MAGENTA_M = "#b5006a"
 AZUL_MARS = "#002d5a"
 
-# 2. ESTILO CSS (Sidebar y Proporciones)
+# CSS para estilo sofisticado
 st.markdown(f"""
     <style>
-    .stApp {{ background-color: #f8f9fa; }}
+    .stApp {{ background-color: #fcfcfc; }}
     [data-testid="stSidebar"] {{ background-color: {AZUL_MARS} !important; }}
     [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] label {{ color: white !important; }}
-    .stSelectbox label {{ color: {AZUL_MARS} !important; font-weight: bold; }}
+    .stMetric {{ background-color: white; border-radius: 15px; border-left: 8px solid {MAGENTA_M}; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CARGA DE DATOS
+# 2. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -37,56 +37,59 @@ def load_data():
 
 df_master = load_data()
 
-# 4. SIDEBAR
+# 3. SIDEBAR
 with st.sidebar:
     st.title("📂 Control PET")
-    menu = st.radio("Sección:", ["📊 Análisis de Red", "📋 Tabla Maestra"])
+    menu = st.radio("Sección:", ["📊 Análisis 360", "📋 Tabla Maestra"])
 
-# 5. ANÁLISIS DE RED (3 Gráficos en una fila)
-if menu == "📊 Análisis de Red":
-    st.title("Visualización Estratégica 360°")
+# 4. ANÁLISIS ESPECTACULAR
+if menu == "📊 Análisis 360":
+    st.title("Visualización de Inventario Multicromática")
     
-    # Filtros superiores
+    # Filtros con acento Mars
     a1, a2 = st.columns(2)
-    with a1: ana_canal = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with a2: ana_campana = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    with a1: ana_canal = st.selectbox("Filtrar Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    with a2: ana_campana = st.selectbox("Filtrar Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
 
     df_ana = df_master.copy()
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    st.metric("Total Unidades Seleccionadas", f"{df_ana['Total'].sum():,.0f}")
+    st.metric("Inventario Seleccionado", f"{df_ana['Total'].sum():,.0f} Unidades")
 
-    # --- FILA DE 3 COLUMNAS ---
+    # --- FILA DE 3 COLUMNAS CON PALETA VIBRANTE ---
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.write("#### 🗺️ Mapa Geográfico")
+        st.write("#### 🗺️ Mapa de Calor Vital")
         df_mapa = df_ana.groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
-        fig_map = px.scatter_mapbox(df_mapa, lat="lat", lon="lon", size="Total", color="Total",
-                                    color_continuous_scale=[AZUL_MARS, MAGENTA], size_max=25, zoom=3.0, mapbox_style="carto-positron")
-        fig_map.update_layout(height=450, margin={"r":5,"t":0,"l":5,"b":0}, showlegend=False)
+        fig_map = px.scatter_mapbox(df_mapa, lat="lat", lon="lon", size="Total", color="Estado",
+                                    color_discrete_sequence=px.colors.qualitative.Prism, 
+                                    size_max=25, zoom=3.0, mapbox_style="carto-positron")
+        fig_map.update_layout(height=450, margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
         st.plotly_chart(fig_map, use_container_width=True)
 
     with c2:
-        st.write("#### 📈 Ranking Almacén")
+        st.write("#### 📈 Distribución por Almacén")
         df_bar = df_ana.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
-        fig_bar = px.bar(df_bar, x="Total", y="Nombre", orientation='h', color="Total", 
-                         color_continuous_scale=[AZUL_MARS, MAGENTA], template="plotly_white")
-        fig_bar.update_layout(height=450, showlegend=False, margin={"r":5,"t":0,"l":5,"b":0})
+        fig_bar = px.bar(df_bar, x="Total", y="Nombre", orientation='h', color="Nombre", 
+                         color_discrete_sequence=px.colors.qualitative.G10, 
+                         template="plotly_white", text_auto='.2s')
+        fig_bar.update_layout(height=450, showlegend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with c3:
-        st.write("#### 🫧 Concentración Campaña")
+        st.write("#### 🫧 Galaxia de Campañas")
         df_bubble = df_ana.groupby(['Nombre', 'Campaña'])['Total'].sum().reset_index()
-        fig_bubble = px.scatter(df_bubble, x="Nombre", y="Campaña", size="Total", color="Total",
-                                color_continuous_scale=[AZUL_MARS, MAGENTA], size_max=40, template="plotly_white")
-        fig_bubble.update_layout(height=450, showlegend=False, margin={"r":5,"t":0,"l":5,"b":0})
+        fig_bubble = px.scatter(df_bubble, x="Nombre", y="Campaña", size="Total", color="Campaña",
+                                color_discrete_sequence=px.colors.qualitative.Vivid, 
+                                size_max=45, template="plotly_white")
+        fig_bubble.update_layout(height=450, showlegend=False)
         st.plotly_chart(fig_bubble, use_container_width=True)
 
-# 6. TABLA MAESTRA
+# 5. TABLA MAESTRA
 else:
-    st.title("Gestión de Inventario Maestro")
+    st.title("Gestión de Inventario")
     f1, f2, f3, f4 = st.columns(4)
     with f1: sel_c = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
     with f2: sel_a = st.selectbox("Almacén", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
