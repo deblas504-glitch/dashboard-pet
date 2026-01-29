@@ -2,23 +2,23 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN DE PÁGINA Y TEMA MAGENTA
-st.set_page_config(layout="wide", page_title="Control PET - Premium Dashboard")
+# 1. CONFIGURACIÓN DE PÁGINA Y TEMA VISUAL
+st.set_page_config(layout="wide", page_title="Mars-Pet Logística")
 
 # Paleta de Colores
 MAGENTA_MARS = "#b5006a"
-DARK_NAVY = "#002d5a"
-BG_LIGHT = "#f8f9fa"
+AZUL_MARS = "#002d5a"
+FONDO_GRIS = "#f8f9fa"
 
-# Inyección de CSS para pestañas y controles sofisticados
+# Inyección de CSS para menús, pestañas y botones en Magenta
 st.markdown(f"""
     <style>
-    .main {{ background-color: {BG_LIGHT}; }}
+    /* Fondo de la aplicación */
+    .main {{ background-color: {FONDO_GRIS}; }}
     
-    /* Estilo de las Pestañas (Tabs) */
+    /* PESTAÑAS (TABS) SUPERIORES */
     button[data-baseweb="tab"] {{
         color: #666 !important;
-        font-size: 16px !important;
         font-weight: 500 !important;
     }}
     button[aria-selected="true"] {{
@@ -26,13 +26,31 @@ st.markdown(f"""
         border-bottom: 3px solid {MAGENTA_MARS} !important;
     }}
 
-    /* Estilo de Métricas (KPIs) */
+    /* MENÚ LATERAL (SIDEBAR) */
+    [data-testid="stSidebar"] {{
+        background-color: white !important;
+        border-right: 1px solid #eee;
+    }}
+    /* Color de los Radio Buttons activos */
+    div[data-testid="stSidebar"] .st-at {{
+        background-color: {MAGENTA_MARS} !important;
+    }}
+
+    /* MÉTRICAS Y CONTENEDORES */
     div[data-testid="stMetric"] {{
         background-color: white;
         padding: 20px;
         border-radius: 12px;
-        border-left: 5px solid {MAGENTA_MARS};
+        border-top: 4px solid {MAGENTA_MARS};
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }}
+
+    /* BOTONES */
+    .stButton>button {{
+        background-color: {MAGENTA_MARS} !important;
+        color: white !important;
+        border-radius: 10px !important;
+        border: none !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -44,7 +62,7 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    # Coordenadas (Mantenemos la lógica interna para el mapa)
+    # Coordenadas internas para el mapa
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat': [21.8823, 30.8406, 26.0444, 19.8301, 16.7569, 28.6330, 19.4326, 27.0587, 19.2433, 24.0277, 19.3562, 21.0190, 17.4392, 20.0911, 20.6597, 19.7008, 18.9220, 21.5095, 25.6866, 17.0732, 19.0414, 20.5888, 19.1817, 22.1565, 24.8091, 29.0730, 17.8409, 23.7369, 19.3181, 19.1738, 20.9674, 22.7709],
@@ -56,58 +74,46 @@ def load_data():
 
 df_master = load_data()
 
-# 3. INTERFAZ POR PESTAÑAS (TABS)
-tab1, tab2, tab3 = st.tabs(["📊 Canal Global", "📋 Lista de Activos", "📑 Tabla de Inventario"])
+# 3. INTERFAZ DE NAVEGACIÓN
+tab1, tab2, tab3 = st.tabs(["📊 Análisis Global", "🚛 Planificación", "📑 Tabla de Inventario"])
 
+# --- TAB 1: ANÁLISIS ---
 with tab1:
-    st.title("Dashboard Estratégico Global")
+    st.subheader("Estado General del Inventario")
     total_u = df_master['Total'].sum()
-    st.metric("Inventario Total Disponible", f"{total_u:,.0f} Unidades")
+    st.metric("Capacidad Total en Red", f"{total_u:,.0f} Unidades")
     
-    # Mapa con nueva paleta
+    # Mapa con paleta Mars (Azul a Magenta)
     df_mapa = df_master.groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
     fig_map = px.scatter_mapbox(
         df_mapa, lat="lat", lon="lon", size="Total", color="Total",
-        color_continuous_scale=[DARK_NAVY, MAGENTA_MARS],
-        size_max=40, zoom=3.8, mapbox_style="carto-positron"
+        color_continuous_scale=[AZUL_MARS, MAGENTA_MARS],
+        size_max=35, zoom=3.8, mapbox_style="carto-positron"
     )
     fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=500)
     st.plotly_chart(fig_map, use_container_width=True)
 
-with tab2:
-    st.title("Ranking por Almacén")
-    df_bar = df_master.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
-    fig_bar = px.bar(
-        df_bar, x="Total", y="Nombre", orientation='h',
-        color="Total", color_continuous_scale=[DARK_NAVY, MAGENTA_MARS],
-        template="plotly_white", text_auto='.2s'
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
-
+# --- TAB 3: TABLA (CON CORRECCIÓN DE COLUMNA 'NOMBRE') ---
 with tab3:
-    st.title("Gestión Detallada de Inventario")
+    st.subheader("Gestión Operativa")
     
-    # SOLUCIÓN AL ERROR: Cambiar 'Almacén' por 'Nombre'
+    # Filtros usando la columna correcta 'Nombre'
     f1, f2, f3 = st.columns(3)
     with f1:
-        sel_a = st.selectbox("Filtrar Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
+        sel_a = st.selectbox("Almacén (Nombre)", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
     with f2:
-        sel_c = st.selectbox("Filtrar Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+        sel_c = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
     with f3:
-        sel_n = st.selectbox("Filtrar Canal", ["Todas"] + sorted(df_master['Canal'].unique().tolist()))
+        sel_n = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
 
-    # Aplicación de Filtros
+    # Aplicación de filtros
     df_f = df_master.copy()
-    if sel_a != "Todas": df_f = df_f[df_f['Nombre'] == sel_a]
+    if sel_a != "Todos": df_f = df_f[df_f['Nombre'] == sel_a]
     if sel_c != "Todas": df_f = df_f[df_f['Campaña'] == sel_c]
-    if sel_n != "Todas": df_f = df_f[df_f['Canal'] == sel_n]
+    if sel_n != "Todos": df_f = df_f[df_f['Canal'] == sel_n]
 
-    # SELECCIÓN DE COLUMNAS (C, D, E, H, I, J, K, L, R, Q)
+    # Selección de columnas: C, D, E, H, I, J, K, L, R, Q (Total)
     indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
-    cols = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
+    cols_visibles = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
     
-    st.dataframe(df_f[cols], use_container_width=True, hide_index=True)
-    
-    # Botón de Descarga
-    csv = df_f[cols].to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Descargar Reporte Ejecutivo", csv, "reporte_magenta.csv", "text/csv")
+    st.dataframe(df_f[cols_visibles], use_container_width=True, hide_index=True)
