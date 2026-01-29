@@ -2,67 +2,76 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN DE PÁGINA Y TEMA VISUAL
-st.set_page_config(layout="wide", page_title="Mars-Pet Logística")
+# 1. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(layout="wide", page_title="Control PET - Sistema Maestro")
 
-# Paleta de Colores
-MAGENTA_MARS = "#b5006a"
+# Paleta Corporativa Mars-Pet
+MAGENTA = "#b5006a"
 AZUL_MARS = "#002d5a"
-FONDO_GRIS = "#f8f9fa"
+BLANCO = "#ffffff"
 
-# Inyección de CSS para menús, pestañas y botones en Magenta
+# 2. INYECCIÓN DE ESTILO (CSS) PARA FORZAR COLORES
 st.markdown(f"""
     <style>
     /* Fondo de la aplicación */
-    .main {{ background-color: {FONDO_GRIS}; }}
+    .stApp {{
+        background-color: #f4f4f4;
+    }}
     
-    /* PESTAÑAS (TABS) SUPERIORES */
-    button[data-baseweb="tab"] {{
-        color: #666 !important;
-        font-weight: 500 !important;
-    }}
-    button[aria-selected="true"] {{
-        color: {MAGENTA_MARS} !important;
-        border-bottom: 3px solid {MAGENTA_MARS} !important;
-    }}
-
-    /* MENÚ LATERAL (SIDEBAR) */
+    /* Sidebar (Menú Lateral) en Azul Mars */
     [data-testid="stSidebar"] {{
-        background-color: white !important;
-        border-right: 1px solid #eee;
+        background-color: {AZUL_MARS} !important;
     }}
-    /* Color de los Radio Buttons activos */
-    div[data-testid="stSidebar"] .st-at {{
-        background-color: {MAGENTA_MARS} !important;
+    
+    /* Texto en Sidebar blanco */
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p, 
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] label {{
+        color: {BLANCO} !important;
     }}
 
-    /* MÉTRICAS Y CONTENEDORES */
+    /* Estilo de las Pestañas (Tabs) */
+    button[data-baseweb="tab"] {{
+        color: #555 !important;
+        font-weight: 600 !important;
+        background-color: transparent !important;
+    }}
+    
+    /* Pestaña activa en Magenta */
+    button[aria-selected="true"] {{
+        color: {MAGENTA} !important;
+        border-bottom: 3px solid {MAGENTA} !important;
+    }}
+
+    /* Métricas (KPIs) con acento Magenta */
     div[data-testid="stMetric"] {{
         background-color: white;
-        padding: 20px;
-        border-radius: 12px;
-        border-top: 4px solid {MAGENTA_MARS};
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        padding: 15px;
+        border-radius: 10px;
+        border-top: 5px solid {MAGENTA};
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
     }}
 
-    /* BOTONES */
+    /* Botones de descarga en Magenta */
     .stButton>button {{
-        background-color: {MAGENTA_MARS} !important;
+        background-color: {MAGENTA} !important;
         color: white !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         border: none !important;
+        font-weight: bold;
     }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS (GOOGLE SHEETS)
+# 3. CARGA DE DATOS (GOOGLE SHEETS)
+# Usando tu ID de hoja actual
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    # Coordenadas internas para el mapa
+    # Coordenadas por Estado para el Mapa
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat': [21.8823, 30.8406, 26.0444, 19.8301, 16.7569, 28.6330, 19.4326, 27.0587, 19.2433, 24.0277, 19.3562, 21.0190, 17.4392, 20.0911, 20.6597, 19.7008, 18.9220, 21.5095, 25.6866, 17.0732, 19.0414, 20.5888, 19.1817, 22.1565, 24.8091, 29.0730, 17.8409, 23.7369, 19.3181, 19.1738, 20.9674, 22.7709],
@@ -74,46 +83,75 @@ def load_data():
 
 df_master = load_data()
 
-# 3. INTERFAZ DE NAVEGACIÓN
-tab1, tab2, tab3 = st.tabs(["📊 Análisis Global", "🚛 Planificación", "📑 Tabla de Inventario"])
+# 4. BARRA LATERAL (SIDEBAR)
+with st.sidebar:
+    st.title("📂 Control PET")
+    st.write("Bienvenido al sistema logístico.")
+    st.markdown("---")
+    # Los Radio Buttons en el sidebar ahora son blancos por el CSS arriba
+    menu_principal = st.radio("Sección:", ["Análisis de Red", "Gestión de Inventario"])
 
-# --- TAB 1: ANÁLISIS ---
-with tab1:
-    st.subheader("Estado General del Inventario")
+# 5. ESTRUCTURA DE PESTAÑAS (TABS)
+if menu_principal == "Análisis de Red":
+    st.title("📊 Análisis Estratégico Global")
+    
+    # KPIs en la parte superior
     total_u = df_master['Total'].sum()
-    st.metric("Capacidad Total en Red", f"{total_u:,.0f} Unidades")
-    
-    # Mapa con paleta Mars (Azul a Magenta)
-    df_mapa = df_master.groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
-    fig_map = px.scatter_mapbox(
-        df_mapa, lat="lat", lon="lon", size="Total", color="Total",
-        color_continuous_scale=[AZUL_MARS, MAGENTA_MARS],
-        size_max=35, zoom=3.8, mapbox_style="carto-positron"
-    )
-    fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=500)
-    st.plotly_chart(fig_map, use_container_width=True)
+    st.metric("Inventario Total en Sistema", f"{total_u:,.0f} U")
 
-# --- TAB 3: TABLA (CON CORRECCIÓN DE COLUMNA 'NOMBRE') ---
-with tab3:
-    st.subheader("Gestión Operativa")
-    
-    # Filtros usando la columna correcta 'Nombre'
-    f1, f2, f3 = st.columns(3)
-    with f1:
-        sel_a = st.selectbox("Almacén (Nombre)", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
-    with f2:
-        sel_c = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
-    with f3:
-        sel_n = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("#### 🗺️ Mapa de Distribución")
+        df_mapa = df_master.groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
+        fig_map = px.scatter_mapbox(
+            df_mapa, lat="lat", lon="lon", size="Total", color="Total",
+            color_continuous_scale=[AZUL_MARS, MAGENTA],
+            size_max=35, zoom=3.8, mapbox_style="carto-positron"
+        )
+        fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=500)
+        st.plotly_chart(fig_map, use_container_width=True)
 
-    # Aplicación de filtros
-    df_f = df_master.copy()
-    if sel_a != "Todos": df_f = df_f[df_f['Nombre'] == sel_a]
-    if sel_c != "Todas": df_f = df_f[df_f['Campaña'] == sel_c]
-    if sel_n != "Todos": df_f = df_f[df_f['Canal'] == sel_n]
+    with col2:
+        st.write("#### 📈 Ranking de Almacenes")
+        # Usamos 'Nombre' para evitar el KeyError
+        df_bar = df_master.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
+        fig_bar = px.bar(
+            df_bar, x="Total", y="Nombre", orientation='h',
+            color="Total", color_continuous_scale=[AZUL_MARS, MAGENTA],
+            template="plotly_white", text_auto='.2s'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Selección de columnas: C, D, E, H, I, J, K, L, R, Q (Total)
-    indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
-    cols_visibles = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
+else:
+    st.title("📋 Gestión de Inventario Maestro")
     
-    st.dataframe(df_f[cols_visibles], use_container_width=True, hide_index=True)
+    # Pestañas Estilizadas
+    tab_tabla, tab_filtros = st.tabs(["📑 Vista de Datos", "🔍 Filtros Avanzados"])
+
+    with tab_filtros:
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            # Corrección: Columna 'Nombre' en lugar de 'Almacén'
+            sel_a = st.selectbox("Almacén", ["Todos"] + sorted(df_master['Nombre'].unique().tolist()))
+        with f2:
+            sel_c = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+        with f3:
+            sel_n = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+
+    with tab_tabla:
+        # Aplicación de filtros
+        df_f = df_master.copy()
+        if sel_a != "Todos": df_f = df_f[df_f['Nombre'] == sel_a]
+        if sel_c != "Todas": df_f = df_f[df_f['Campaña'] == sel_c]
+        if sel_n != "Todos": df_f = df_f[df_f['Canal'] == sel_n]
+
+        # SELECCIÓN DE COLUMNAS: C, D, E, H, I, J, K, L, R, Q (Total)
+        # Columna R (índice 17) colocada antes del Total (índice 16)
+        indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
+        cols_visibles = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
+        
+        st.dataframe(df_f[cols_visibles], use_container_width=True, hide_index=True)
+        
+        # Botón de Descarga
+        csv = df_f[cols_visibles].to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Exportar Reporte Magenta", csv, "inventario_final.csv", "text/csv")
