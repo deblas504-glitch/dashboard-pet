@@ -33,7 +33,6 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    # CORRECCIÓN DE SINTAXIS AQUÍ
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat': [21.8823, 30.8406, 26.0444, 19.8301, 16.7569, 28.6330, 19.4326, 27.0587, 19.2433, 24.0277, 19.3562, 21.0190, 17.4392, 20.0911, 20.6597, 19.7008, 18.9220, 21.5095, 25.6866, 17.0732, 19.0414, 20.5888, 19.1817, 22.1565, 24.8091, 29.0730, 17.8409, 23.7369, 19.3181, 19.1738, 20.9674, 22.7709],
@@ -66,31 +65,37 @@ if menu == "📊 Análisis 360":
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    # --- FILTRO DE AGUA ---
-    col_met, col_niv = st.columns([1, 2])
+    # --- LÓGICA DE AGUA AL 100% DEL TOTAL SELECCIONADO ---
+    col_met, col_niv = st.columns([1, 1])
     total_u = df_ana['Total'].sum()
-    porc = min(total_u / 1000000, 1.0) # Basado en 1M de capacidad
-
+    
+    # Para que siempre marque 100%, el dato de entrada debe ser 1.0 (lleno)
+    # Mostramos el número real en la etiqueta central
     with col_met:
         st.metric("Inventario Total Seleccionado", f"{total_u:,.0f} U")
     
     with col_niv:
-        # Gráfica de agua con ola suave
         liquid_opt = {
             "series": [{
                 "type": 'liquidFill',
-                "data": [porc, porc - 0.05],
+                "data": [1.0, 0.95], # Forzamos el llenado al 100%
                 "color": [MAGENTA_PVD, "#d6007d"],
                 "radius": '90%',
                 "amplitude": 10,
                 "backgroundStyle": {"color": "#eee"},
                 "outline": {"borderDistance": 2, "itemStyle": {"borderWidth": 4, "borderColor": AZUL_PVD}},
-                "label": {"fontSize": 30, "color": AZUL_PVD, "formatter": f"{porc*100:.1f}%"}
+                "label": {
+                    "fontSize": 28, 
+                    "color": AZUL_PVD, 
+                    "formatter": f"TOTAL\n{total_u:,.0f} U", # Texto personalizado
+                    "fontWeight": "bold"
+                }
             }]
         }
         st_echarts(liquid_opt, height="200px")
 
     st.markdown("---")
+    # Gráficos alineados: Mapa, Ranking, Burbujas
     c1, c2, c3 = st.columns(3)
     with c1:
         st.write("#### 🗺️ Cobertura")
