@@ -65,20 +65,24 @@ if menu == "📊 Análisis 360":
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    # --- LÓGICA DE AGUA AL 100% DEL TOTAL SELECCIONADO ---
+    # --- LÓGICA DE AGUA BASADA EN 441,000 PIEZAS ---
     col_met, col_niv = st.columns([1, 1])
     total_u = df_ana['Total'].sum()
     
-    # Para que siempre marque 100%, el dato de entrada debe ser 1.0 (lleno)
-    # Mostramos el número real en la etiqueta central
+    # Capacidad de referencia fija que mencionaste
+    CAPACIDAD_MAXIMA = 441000 
+    # Calculamos qué porcentaje del total representan los filtros actuales
+    porcentaje_llenado = min(total_u / CAPACIDAD_MAXIMA, 1.0)
+
     with col_met:
-        st.metric("Inventario Total Seleccionado", f"{total_u:,.0f} U")
+        st.metric("Inventario Filtrado", f"{total_u:,.0f} U")
+        st.write(f"Representa el **{porcentaje_llenado*100:.1f}%** de la capacidad total (441k).")
     
     with col_niv:
         liquid_opt = {
             "series": [{
                 "type": 'liquidFill',
-                "data": [1.0, 0.95], # Forzamos el llenado al 100%
+                "data": [porcentaje_llenado, porcentaje_llenado - 0.05], # La ola baja según el filtro
                 "color": [MAGENTA_PVD, "#d6007d"],
                 "radius": '90%',
                 "amplitude": 10,
@@ -87,7 +91,7 @@ if menu == "📊 Análisis 360":
                 "label": {
                     "fontSize": 28, 
                     "color": AZUL_PVD, 
-                    "formatter": f"TOTAL\n{total_u:,.0f} U", # Texto personalizado
+                    "formatter": f"{porcentaje_llenado*100:.1f}%\nOCUPADO",
                     "fontWeight": "bold"
                 }
             }]
@@ -95,7 +99,7 @@ if menu == "📊 Análisis 360":
         st_echarts(liquid_opt, height="200px")
 
     st.markdown("---")
-    # Gráficos alineados: Mapa, Ranking, Burbujas
+    # Gráficos de apoyo (Mapa, Ranking, Burbujas)
     c1, c2, c3 = st.columns(3)
     with c1:
         st.write("#### 🗺️ Cobertura")
