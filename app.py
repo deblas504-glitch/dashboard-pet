@@ -11,7 +11,30 @@ st.set_page_config(layout="wide", page_title="Control PET - PVD Logística", pag
 MAGENTA_PVD = "#b5006a"
 AZUL_PVD = "#002d5a"
 
-# 2. ESTILO CSS
+# 2. SISTEMA DE CLAVE DE ACCESO
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
+
+def validar_clave():
+    if st.session_state["clave_usuario"] == "12345":
+        st.session_state['autenticado'] = True
+    else:
+        st.error("Clave incorrecta. Intente de nuevo.")
+
+if not st.session_state['autenticado']:
+    # Pantalla de Login
+    col_logo, col_login = st.columns([1, 2])
+    with col_logo:
+        if os.path.exists("logo_PVD.png"):
+            st.image("logo_PVD.png", use_container_width=True)
+    with col_login:
+        st.title("Acceso al Sistema PVD")
+        st.text_input("Ingrese la clave de acceso:", type="password", key="clave_usuario", on_change=validar_clave)
+    st.stop() # Detiene la ejecución del resto de la app hasta que se autentique
+
+# --- A PARTIR DE AQUÍ EL CONTENIDO ESTÁ PROTEGIDO ---
+
+# 3. ESTILO CSS
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #fcfcfc; }}
@@ -26,7 +49,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CARGA DE DATOS
+# 4. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -44,16 +67,19 @@ def load_data():
 
 df_master = load_data()
 
-# 4. SIDEBAR CON LOGO PVD
+# 5. SIDEBAR
 with st.sidebar:
     if os.path.exists("logo_PVD.png"):
         st.image("logo_PVD.png", use_container_width=True)
     else:
         st.title("PVD LOGÍSTICA")
     st.markdown("---")
-    menu = st.radio("Sección del Sistema:", ["📊 Análisis 360", "📋 Gestión de Inventario"])
+    menu = st.radio("Sección:", ["📊 Análisis 360", "📋 Gestión de Inventario"])
+    if st.button("Cerrar Sesión"):
+        st.session_state['autenticado'] = False
+        st.rerun()
 
-# 5. VISTA: ANÁLISIS 360
+# 6. VISTA: ANÁLISIS 360
 if menu == "📊 Análisis 360":
     st.title("Dashboard de análisis de Inventario")
     
@@ -76,7 +102,6 @@ if menu == "📊 Análisis 360":
         st.write(f"Referencia de Red: **441,000 U**")
     
     with col_niv:
-        # Gráfica con fuente Franklin Gothic Style
         liquid_opt = {
             "series": [{
                 "type": 'liquidFill',
@@ -91,7 +116,6 @@ if menu == "📊 Análisis 360":
                     "color": AZUL_PVD, 
                     "formatter": f"{porcentaje_llenado*100:.1f}%",
                     "fontWeight": "900",
-                    # Tipografía similar a Franklin Gothic Demi Cond
                     "fontFamily": "'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif"
                 }
             }]
@@ -99,7 +123,7 @@ if menu == "📊 Análisis 360":
         st_echarts(liquid_opt, height="200px")
 
     st.markdown("---")
-    # Gráficos alineados: Mapa, Ranking, Burbujas
+    # Gráficos alineados
     c1, c2, c3 = st.columns(3)
     with c1:
         st.write("#### 🗺️ Cobertura")
@@ -125,7 +149,7 @@ if menu == "📊 Análisis 360":
         fig_bubble.update_layout(height=400, showlegend=False)
         st.plotly_chart(fig_bubble, use_container_width=True)
 
-# 6. GESTIÓN DE INVENTARIO
+# 7. GESTIÓN DE INVENTARIO
 else:
     st.title("Gestión de Inventario Maestro")
     col_alm = 'Nombre' if 'Nombre' in df_master.columns else df_master.columns[3]
