@@ -65,41 +65,41 @@ if menu == "📊 Análisis 360":
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    # --- LÓGICA DE AGUA BASADA EN 441,000 PIEZAS ---
+    # --- MÉTRICA Y GRÁFICA DE AGUA (441k como 100%) ---
     col_met, col_niv = st.columns([1, 1])
     total_u = df_ana['Total'].sum()
-    
-    # Capacidad de referencia fija que mencionaste
-    CAPACIDAD_MAXIMA = 441000 
-    # Calculamos qué porcentaje del total representan los filtros actuales
-    porcentaje_llenado = min(total_u / CAPACIDAD_MAXIMA, 1.0)
+    CAPACIDAD_REF = 441000 
+    porcentaje_llenado = min(total_u / CAPACIDAD_REF, 1.0)
 
     with col_met:
         st.metric("Inventario Filtrado", f"{total_u:,.0f} U")
-        st.write(f"Representa el **{porcentaje_llenado*100:.1f}%** de la capacidad total (441k).")
+        st.write(f"Referencia de Red: **441,000 U**")
     
     with col_niv:
+        # Gráfica con fuente Franklin Gothic Style
         liquid_opt = {
             "series": [{
                 "type": 'liquidFill',
-                "data": [porcentaje_llenado, porcentaje_llenado - 0.05], # La ola baja según el filtro
+                "data": [porcentaje_llenado, porcentaje_llenado - 0.05],
                 "color": [MAGENTA_PVD, "#d6007d"],
                 "radius": '90%',
                 "amplitude": 10,
                 "backgroundStyle": {"color": "#eee"},
                 "outline": {"borderDistance": 2, "itemStyle": {"borderWidth": 4, "borderColor": AZUL_PVD}},
                 "label": {
-                    "fontSize": 28, 
+                    "fontSize": 45, 
                     "color": AZUL_PVD, 
-                    "formatter": f"{porcentaje_llenado*100:.1f}%\nOCUPADO",
-                    "fontWeight": "bold"
+                    "formatter": f"{porcentaje_llenado*100:.1f}%",
+                    "fontWeight": "900",
+                    # Tipografía similar a Franklin Gothic Demi Cond
+                    "fontFamily": "'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif"
                 }
             }]
         }
         st_echarts(liquid_opt, height="200px")
 
     st.markdown("---")
-    # Gráficos de apoyo (Mapa, Ranking, Burbujas)
+    # Gráficos alineados: Mapa, Ranking, Burbujas
     c1, c2, c3 = st.columns(3)
     with c1:
         st.write("#### 🗺️ Cobertura")
