@@ -52,23 +52,21 @@ def load_data():
 
 df_master = load_data()
 
-# 4. SIDEBAR CON LOGO LOCAL
+# 4. SIDEBAR CON EL LOGO QUE SUBISTE
 with st.sidebar:
-    logo_encontrado = False
-    for ext in [".png", ".jpg", ".jpeg", ".PNG"]:
-        if os.path.exists(f"logo_PVD{ext}"):
-            st.image(f"logo_PVD{ext}", use_container_width=True)
-            logo_encontrado = True
-            break
-    if not logo_encontrado:
+    # Ajustado al nombre exacto del archivo que veo en tu editor
+    if os.path.exists("logo_PVD.png"):
+        st.image("logo_PVD.png", use_container_width=True)
+    else:
         st.title("PVD LOGÍSTICA")
     
     st.markdown("---")
     menu = st.radio("Menú Principal:", ["📊 Análisis 360", "📋 Gestión de Inventario"])
 
-# 5. VISTA: ANÁLISIS 360 (Gráficos Espectaculares)
+# 5. VISTA: ANÁLISIS 360
 if menu == "📊 Análisis 360":
-    st.title("Visualización Estratégica Multicromática")
+    # Título exacto solicitado
+    st.title("Dashboard de análisis de Inventario")
     
     a1, a2 = st.columns(2)
     with a1: ana_canal = st.selectbox("Filtrar Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
@@ -78,9 +76,8 @@ if menu == "📊 Análisis 360":
     if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
     if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
 
-    st.metric("Inventario Seleccionado", f"{df_ana['Total'].sum():,.0f} U")
+    st.metric("Inventario Total Seleccionado", f"{df_ana['Total'].sum():,.0f} U")
 
-    # FILA DE 3 COLUMNAS ALINEADAS
     c1, c2, c3 = st.columns(3)
 
     with c1:
@@ -94,6 +91,7 @@ if menu == "📊 Análisis 360":
 
     with c2:
         st.write("#### 📈 Ranking de Almacenes")
+        # Corrección: Se usa 'Nombre' para evitar el KeyError
         df_bar = df_ana.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
         fig_bar = px.bar(df_bar, x="Total", y="Nombre", orientation='h', color="Nombre", 
                          color_discrete_sequence=px.colors.qualitative.G10, template="plotly_white")
@@ -109,11 +107,11 @@ if menu == "📊 Análisis 360":
         fig_bubble.update_layout(height=450, showlegend=False)
         st.plotly_chart(fig_bubble, use_container_width=True)
 
-# 6. VISTA: GESTIÓN DE INVENTARIO (Tabla Maestra)
+# 6. VISTA: GESTIÓN DE INVENTARIO
 else:
     st.title("Gestión de Inventario Maestro")
     
-    # DINÁMICA DE ALMACÉN PARA EVITAR KEYERROR
+    # Se asegura de usar 'Nombre' para el almacén
     col_alm = 'Nombre' if 'Nombre' in df_master.columns else df_master.columns[3]
     
     f1, f2, f3, f4 = st.columns(4)
@@ -128,7 +126,7 @@ else:
     if sel_p != "Todas": df_f = df_f[df_f['Campaña'] == sel_p]
     if sel_l != "Todas": df_f = df_f[df_f['Clasificación'] == sel_l]
 
-    # SELECCIÓN DE COLUMNAS (Incluye R antes de Q/Total)
+    # Columnas específicas incluyendo R (17) antes de Total (16)
     indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
     cols_vis = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
     
