@@ -135,54 +135,60 @@ else:
     st.dataframe(df_t[cols], use_container_width=True, hide_index=True)
     # ... (Todo el código anterior de carga de datos y Análisis 360 se mantiene igual)
 
-# 7. SECCIÓN: NUEVAS CAMPAÑAS (ESTILO CARRITO WALMART)
+# 7. SECCIÓN: NUEVAS CAMPAÑAS (CATÁLOGO VISUAL)
 if menu == "✨ Nuevas Campañas":
-    st.title("✨ Catálogo de Lanzamientos")
+    st.title("✨ Catálogo Visual de Lanzamientos")
     
-    # Filtro automático para campañas 2026 o marcadas específicamente
-    nuevas = [c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)]
-    sel_new = st.selectbox("Seleccionar Lanzamiento:", nuevas)
+    # Buscador específico para el catálogo
+    search_cat = st.text_input("🔍 Buscar producto por descripción o código", placeholder="Ej: BOTADERO...")
     
-    df_new = df_master[df_master['Campaña'] == sel_new]
+    # Filtro de Campaña para segmentar el catálogo
+    nuevas = ["Todas"] + sorted([c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)])
+    sel_new = st.selectbox("Filtrar por Lanzamiento:", nuevas)
+    
+    df_cat = df_master.copy()
+    if sel_new != "Todas":
+        df_cat = df_cat[df_cat['Campaña'] == sel_new]
+    if search_cat:
+        df_cat = df_cat[df_cat['Descripción'].str.contains(search_cat, case=False, na=False) | 
+                        df_cat['código'].str.contains(search_cat, case=False, na=False)]
 
-    # Diseño de cuadrícula (3 productos por fila)
-    cols_visual = st.columns(3)
-    
-    for index, (i, row) in enumerate(df_new.iterrows()):
-        with cols_visual[index % 3]:
-            # Imagen del producto - Cambia 'url_imagen' por el nombre de tu columna con links
-            # Si las tienes local, usa: st.image(f"fotos/{row['código']}.jpg")
-            st.image("https://via.placeholder.com/200", use_container_width=True) 
-            
-            st.subheader(row['Descripción'])
-            st.write(f"**SKU:** {row['código']} | **Stock:** {row['Disponible']}")
-            st.write(f"📍 {row['Nombre']}")
-            
-            # Botón estilo Carrito
-            if st.button(f"➕ Agregar al Pedido", key=f"btn_{row['código']}_{index}"):
-                st.success(f"Agregado: {row['Descripción']}")
+    st.markdown("---")
 
-# 8. SECCIÓN: GESTIÓN DE INVENTARIO (FILTROS Y TABLA LIMPIA)
+    # Generar el catálogo en cuadrícula
+    if not df_cat.empty:
+        cols_visual = st.columns(3) # 3 productos por fila
+        for index, (i, row) in enumerate(df_cat.iterrows()):
+            with cols_visual[index % 3]:
+                # Marco de tarjeta para cada producto
+                with st.container(border=True):
+                    # Lógica de imagen: busca por código de producto
+                    # Reemplaza el link por tu carpeta local si prefieres: f"fotos/{row['código']}.jpg"
+                    st.image("https://via.placeholder.com/300x200?text=IMAGEN+PRODUCTO", use_container_width=True)
+                    
+                    st.markdown(f"### {row['Descripción']}")
+                    st.markdown(f"**SKU:** `{row['código']}`")
+                    
+                    # Indicadores de Inventario con colores
+                    col_inf1, col_inf2 = st.columns(2)
+                    with col_inf1:
+                        st.caption("Disponible")
+                        st.subheader(f"{row['Disponible']:,.0f}")
+                    with col_inf2:
+                        st.caption("Apartados")
+                        st.subheader(f"{row['Apartados']:,.0f}")
+                    
+                    st.write(f"📍 **Ubicación:** {row['Nombre']}")
+                    
+                    # Botón de acción tipo 'Carrito'
+                    if st.button(f"🛒 Consultar {row['código']}", key=f"cat_{row['código']}_{index}"):
+                        st.info(f"Detalle: {row['Clasificación']} - {row['Estado de material']}")
+    else:
+        st.warning("No se encontraron productos con esos criterios.")
+
+# 8. SECCIÓN: GESTIÓN DE INVENTARIO (TABLA TÉCNICA)
 else:
+    # ... (Aquí va tu código de la tabla técnica con las columnas C a Q)
     st.title("📦 Gestión de Inventario")
-    
-    # Restauración de filtros horizontales
-    r1c1, r1c2 = st.columns([1, 2])
-    with r1c1: 
-        sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
-    with r1c2: 
-        search = st.text_input("Descripción (Buscador)", placeholder="Search...")
-
-    df_t = df_master.copy()
-    if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
-    if search: df_t = df_t[df_t['Descripción'].str.contains(search, case=False, na=False)]
-
-    # Columnas específicas: C a L y Q (Sin latitud/longitud)
-    columnas_finales = [
-        'código', 'Descripción', 'Nombre', 'Canal', 
-        'Clasificación', 'Campaña', 'Estado de material', 
-        'Apartados', 'Disponible'
-    ]
-
-    st.dataframe(df_t[columnas_finales], use_container_width=True, hide_index=True)
-    
+    cols_tabla = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
+    st.dataframe(df_master[cols_tabla], use_container_width=True, hide_index=True)
