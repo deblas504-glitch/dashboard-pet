@@ -133,4 +133,56 @@ else:
     # Columnas: C a L y Q (Apartados antes de Disponible)
     cols = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
     st.dataframe(df_t[cols], use_container_width=True, hide_index=True)
+    # ... (Todo el código anterior de carga de datos y Análisis 360 se mantiene igual)
+
+# 7. SECCIÓN: NUEVAS CAMPAÑAS (ESTILO CARRITO WALMART)
+if menu == "✨ Nuevas Campañas":
+    st.title("✨ Catálogo de Lanzamientos")
+    
+    # Filtro automático para campañas 2026 o marcadas específicamente
+    nuevas = [c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)]
+    sel_new = st.selectbox("Seleccionar Lanzamiento:", nuevas)
+    
+    df_new = df_master[df_master['Campaña'] == sel_new]
+
+    # Diseño de cuadrícula (3 productos por fila)
+    cols_visual = st.columns(3)
+    
+    for index, (i, row) in enumerate(df_new.iterrows()):
+        with cols_visual[index % 3]:
+            # Imagen del producto - Cambia 'url_imagen' por el nombre de tu columna con links
+            # Si las tienes local, usa: st.image(f"fotos/{row['código']}.jpg")
+            st.image("https://via.placeholder.com/200", use_container_width=True) 
+            
+            st.subheader(row['Descripción'])
+            st.write(f"**SKU:** {row['código']} | **Stock:** {row['Disponible']}")
+            st.write(f"📍 {row['Nombre']}")
+            
+            # Botón estilo Carrito
+            if st.button(f"➕ Agregar al Pedido", key=f"btn_{row['código']}_{index}"):
+                st.success(f"Agregado: {row['Descripción']}")
+
+# 8. SECCIÓN: GESTIÓN DE INVENTARIO (FILTROS Y TABLA LIMPIA)
+else:
+    st.title("📦 Gestión de Inventario")
+    
+    # Restauración de filtros horizontales
+    r1c1, r1c2 = st.columns([1, 2])
+    with r1c1: 
+        sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
+    with r1c2: 
+        search = st.text_input("Descripción (Buscador)", placeholder="Search...")
+
+    df_t = df_master.copy()
+    if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
+    if search: df_t = df_t[df_t['Descripción'].str.contains(search, case=False, na=False)]
+
+    # Columnas específicas: C a L y Q (Sin latitud/longitud)
+    columnas_finales = [
+        'código', 'Descripción', 'Nombre', 'Canal', 
+        'Clasificación', 'Campaña', 'Estado de material', 
+        'Apartados', 'Disponible'
+    ]
+
+    st.dataframe(df_t[columnas_finales], use_container_width=True, hide_index=True)
     
