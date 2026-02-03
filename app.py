@@ -16,7 +16,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. SISTEMA DE ACCESO (Clave: 12345)
+# 2. SISTEMA DE ACCESO
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -31,7 +31,7 @@ if not st.session_state.autenticado:
             st.error("Clave incorrecta")
     st.stop()
 
-# 3. CARGA DE DATOS (GOOGLE SHEETS)
+# 3. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -49,23 +49,26 @@ def load_data():
 
 df_master = load_data()
 
-# 4. FUNCIÓN LIQUID FILL (AGUA ANIMADA)
+# 4. FUNCIÓN LIQUID FILL CORREGIDA (CON OLEAJE REAL)
 def draw_liquid_fill(percent):
-    wave_top = 100 - percent
+    # El nivel del agua sube de 100 (vacío) a 0 (lleno)
+    level = 100 - percent
     return f"""
-    <div style="display: flex; justify-content: center; height: 260px;">
-        <div style="width: 200px; height: 200px; border-radius: 50%; border: 6px solid {AZUL_BARRA}; position: relative; overflow: hidden; background: #eee;">
-            <div style="position: absolute; width: 100%; top: {wave_top}%; height: 100%; background: {MAGENTA}; transition: top 1s;">
-                <svg viewBox="0 0 500 150" style="position: absolute; top: -40px; width: 200%; height: 50px; animation: move_w 3s linear infinite;">
-                    <path d="M0,100 C150,200 350,0 500,100 L500,0 L0,0 Z" fill="{MAGENTA}"></path>
-                </svg>
+    <div style="display: flex; justify-content: center; align-items: center; height: 260px;">
+        <div style="width: 200px; height: 200px; border-radius: 50%; border: 6px solid {AZUL_BARRA}; position: relative; overflow: hidden; background: #f0f0f0;">
+            <div style="position: absolute; width: 200%; height: 200%; top: {level}%; left: -50%; background: {MAGENTA}; border-radius: 40%; animation: wave_animation 5s linear infinite;">
             </div>
-            <div style="position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: 42px; font-weight: bold; color: {'white' if percent > 50 else AZUL_BARRA}; z-index: 10;">
+            <div style="position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-family: sans-serif; font-size: 42px; font-weight: bold; color: {'white' if percent > 55 else AZUL_BARRA}; z-index: 10;">
                 {percent:.1f}%
             </div>
         </div>
     </div>
-    <style> @keyframes move_w {{ 0% {{ transform: translateX(0); }} 100% {{ transform: translateX(-50%); }} }} </style>
+    <style>
+        @keyframes wave_animation {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(360deg); }}
+        }}
+    </style>
     """
 
 # 5. MENÚ LATERAL
@@ -95,6 +98,7 @@ if menu == "📊 Análisis 360":
         st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{df_f['Disponible'].sum():,.0f}</h1></div>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
+    # ... (Gráficas se mantienen igual)
     with col1:
         st.write("🗺️ **Cobertura**")
         st.plotly_chart(px.scatter_mapbox(df_f, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible", color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300), use_container_width=True)
@@ -105,11 +109,11 @@ if menu == "📊 Análisis 360":
         st.write("🟣 **Campaña vs Canal**")
         st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
 
-# 7. GESTIÓN DE INVENTARIO (FILTROS RESTAURADOS)
+# 7. GESTIÓN DE INVENTARIO
 else:
     st.title("📦 Gestión de Inventario")
     
-    # FILTROS SUPERIORES
+    # FILTROS RESTAURADOS
     r1c1, r1c2 = st.columns([1, 2])
     with r1c1: sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
     with r1c2: search = st.text_input("Buscador", placeholder="Search...")
@@ -119,7 +123,6 @@ else:
     with r2c2: sel_ca = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
     with r2c3: sel_cn = st.selectbox("Canal", ["Todas"] + sorted(df_master['Canal'].unique().tolist()))
 
-    # Lógica de filtros
     df_t = df_master.copy()
     if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
     if search: df_t = df_t[df_t['Descripción'].str.contains(search, case=False, na=False)]
@@ -127,8 +130,6 @@ else:
     if sel_ca != "Todas": df_t = df_t[df_t['Campaña'] == sel_ca]
     if sel_cn != "Todas": df_t = df_t[df_t['Canal'] == sel_cn]
 
-    # Columnas: C a L y Q (Apartados a la izquierda de Disponible)
     cols = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
-    
     st.dataframe(df_t[cols], use_container_width=True, hide_index=True)
     st.download_button("📥 Descargar Reporte", df_t[cols].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
