@@ -49,7 +49,7 @@ if not st.session_state.autenticado:
             st.error("Clave incorrecta")
     st.stop()
 
-# 3. CARGA DE DATOS (CORREGIDA)
+# 3. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -57,7 +57,7 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 def load_data():
     df = pd.read_excel(URL)
     df.columns = df.columns.str.strip()
-    # Coordenadas internas para mapas (Sin errores de diccionario)
+    # Coordenadas internas para mapas
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
@@ -122,7 +122,7 @@ if menu == "📊 Análisis 360":
         st.write("🟣 **Campaña vs Canal**")
         st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
 
-# 7. VISTA: NUEVAS CAMPAÑAS (CATÁLOGO ESTILO WALMART)
+# 7. VISTA: NUEVAS CAMPAÑAS (CATÁLOGO ESTILO WALMART - CARPETA "IMAGENES")
 elif menu == "✨ Nuevas Campañas":
     st.title("✨ Catálogo Visual de Lanzamientos")
     
@@ -140,27 +140,34 @@ elif menu == "✨ Nuevas Campañas":
         for index, (i, row) in enumerate(df_cat.iterrows()):
             with cols_grid[index % 3]:
                 with st.container(border=True):
-                    # AMARRE DE IMAGEN: Busca en carpeta 'fotos' por SKU
-                    ruta_img = f"fotos/{row['código']}.jpg"
-                    if os.path.exists(ruta_img):
-                        st.image(ruta_img, use_container_width=True)
+                    # AMARRE DE IMAGEN: Busca en carpeta 'IMAGENES' con múltiples extensiones
+                    sku = str(row['código'])
+                    ruta_encontrada = None
+                    for ext in ['.jpg', '.png', '.jpeg', '.JPG', '.PNG']:
+                        path = f"IMAGENES/{sku}{ext}"
+                        if os.path.exists(path):
+                            ruta_encontrada = path
+                            break
+                    
+                    if ruta_encontrada:
+                        st.image(ruta_encontrada, use_container_width=True)
                     else:
                         st.image("https://via.placeholder.com/300x200?text=SIN+FOTO", use_container_width=True)
                     
                     st.markdown(f"### {row['Descripción']}")
-                    st.write(f"**SKU:** `{row['código']}`")
+                    st.write(f"**SKU:** `{sku}`")
                     st.write(f"📍 **Almacén:** {row['Nombre']}")
                     
                     ci1, ci2 = st.columns(2)
                     ci1.metric("Disponible", f"{row['Disponible']:,.0f}")
                     ci2.metric("Apartados", f"{row['Apartados']:,.0f}")
                     
-                    if st.button("➕ Agregar al pedido", key=f"btn_{row['código']}_{index}"):
-                        st.success(f"Producto {row['código']} agregado.")
+                    if st.button("➕ Agregar al pedido", key=f"btn_{sku}_{index}"):
+                        st.success(f"Producto {sku} agregado.")
     else:
         st.warning("No se encontraron productos.")
 
-# 8. VISTA: GESTIÓN DE INVENTARIO (TABLA TÉCNICA)
+# 8. VISTA: GESTIÓN DE INVENTARIO
 else:
     st.title("📦 Gestión de Inventario")
     r1, r2 = st.columns([1, 2])
