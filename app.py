@@ -1,170 +1,100 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from streamlit_echarts import st_echarts
-import os
 
-# 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(layout="wide", page_title="Control PET - PVD Logística", page_icon="📊")
+# 1. CONFIGURACIÓN DE PÁGINA Y ACCESO
+st.set_page_config(layout="wide", page_title="Control PET - Acceso Seguro")
 
-# Colores PVD
-MAGENTA_PVD = "#b5006a"
-AZUL_PVD = "#002d5a"
+# Estilos de Marca
+MAGENTA = "#b5006a"
+AZUL_PROFUNDO = "#002d5a"
 
-# 2. SISTEMA DE CLAVE DE ACCESO
-if 'autenticado' not in st.session_state:
-    st.session_state['autenticado'] = False
+# --- SISTEMA DE LOGUEO ---
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
 
-def validar_clave():
-    if st.session_state["clave_usuario"] == "12345":
-        st.session_state['autenticado'] = True
-    else:
-        st.error("Clave incorrecta. Intente de nuevo.")
+if not st.session_state.autenticado:
+    st.title("🔐 Acceso al Sistema PET")
+    clave = st.text_input("Introduce la clave de acceso:", type="password")
+    if st.button("Entrar"):
+        if clave == "12345": # Clave solicitada
+            st.session_state.autenticado = True
+            st.rerun()
+        else:
+            st.error("Clave incorrecta")
+    st.stop()
 
-if not st.session_state['autenticado']:
-    # Pantalla de Login
-    col_logo, col_login = st.columns([1, 2])
-    with col_logo:
-        if os.path.exists("logo_PVD.png"):
-            st.image("logo_PVD.png", use_container_width=True)
-    with col_login:
-        st.title("Acceso al Sistema PVD")
-        st.text_input("Ingrese la clave de acceso:", type="password", key="clave_usuario", on_change=validar_clave)
-    st.stop() # Detiene la ejecución del resto de la app hasta que se autentique
-
-# --- A PARTIR DE AQUÍ EL CONTENIDO ESTÁ PROTEGIDO ---
-
-# 3. ESTILO CSS
-st.markdown(f"""
-    <style>
-    .stApp {{ background-color: #fcfcfc; }}
-    [data-testid="stSidebar"] {{ background-color: {AZUL_PVD} !important; }}
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] label {{ color: white !important; }}
-    .stMetric {{ 
-        background-color: white; 
-        border-radius: 15px; 
-        border-left: 10px solid {MAGENTA_PVD}; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-
-# 4. CARGA DE DATOS
+# 2. CARGA DE DATOS (GOOGLE SHEETS)
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
 @st.cache_data(ttl=60)
 def load_data():
     df = pd.read_excel(URL)
-    coords = {
-        'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
-        'lat': [21.8823, 30.8406, 26.0444, 19.8301, 16.7569, 28.6330, 19.4326, 27.0587, 19.2433, 24.0277, 19.3562, 21.0190, 17.4392, 20.0911, 20.6597, 19.7008, 18.9220, 21.5095, 25.6866, 17.0732, 19.0414, 20.5888, 19.1817, 22.1565, 24.8091, 29.0730, 17.8409, 23.7369, 19.3181, 19.1738, 20.9674, 22.7709],
-        'lon': [-102.2826, -115.2838, -111.6661, -90.5349, -93.1292, -106.0691, -99.1332, -101.7068, -103.7250, -104.6532, -99.1013, -101.2574, -99.5451, -98.7624, -103.3496, -101.1844, -99.2347, -104.8946, -100.3161, -96.7266, -98.2063, -100.3899, -88.4711, -100.9855, -107.3940, -110.9673, -92.6189, -99.1460, -98.2375, -96.1342, -89.5926, -102.5831]
-    }
-    df_coords = pd.DataFrame(coords)
-    df['Estado'] = df['Estado'].astype(str).str.strip()
-    return pd.merge(df, df_coords, on='Estado', how='left')
+    df.columns = df.columns.str.strip() # Limpieza de nombres
+    return df
 
 df_master = load_data()
 
-# 5. SIDEBAR
+# 3. BARRA LATERAL
 with st.sidebar:
-    if os.path.exists("logo_PVD.png"):
-        st.image("logo_PVD.png", use_container_width=True)
-    else:
-        st.title("PVD LOGÍSTICA")
-    st.markdown("---")
-    menu = st.radio("Sección:", ["📊 Análisis 360", "📋 Gestión de Inventario"])
+    st.title("🚀 Gestión de Inventarios")
+    menu = st.radio("Sección:", ["Análisis de Inventario", "Tabla Maestra"])
     if st.button("Cerrar Sesión"):
-        st.session_state['autenticado'] = False
+        st.session_state.autenticado = False
         st.rerun()
 
-# 6. VISTA: ANÁLISIS 360
-if menu == "📊 Análisis 360":
-    st.title("Dashboard de análisis de Inventario")
+# 4. VISTA: ANÁLISIS DE INVENTARIO
+if menu == "Análisis de Inventario":
+    st.title("📊 Análisis Estratégico")
     
-    a1, a2 = st.columns(2)
-    with a1: ana_canal = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with a2: ana_campana = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
-
+    # Filtro de Canal
+    lista_canales = ["Todos"] + sorted(df_master['Canal'].unique().tolist())
+    canal_sel = st.selectbox("Seleccionar Canal:", lista_canales)
+    
     df_ana = df_master.copy()
-    if ana_canal != "Todos": df_ana = df_ana[df_ana['Canal'] == ana_canal]
-    if ana_campana != "Todas": df_ana = df_ana[df_ana['Campaña'] == ana_campana]
+    if canal_sel != "Todos":
+        df_ana = df_master[df_master['Canal'] == canal_sel]
 
-    # --- MÉTRICA Y GRÁFICA DE AGUA (441k como 100%) ---
-    col_met, col_niv = st.columns([1, 1])
-    total_u = df_ana['Total'].sum()
-    CAPACIDAD_REF = 441000 
-    porcentaje_llenado = min(total_u / CAPACIDAD_REF, 1.0)
-
-    with col_met:
-        st.metric("Inventario Filtrado", f"{total_u:,.0f} U")
-        st.write(f"Referencia de Red: **441,000 U**")
+    # Cálculo de Disponibilidad
+    total_disponible = df_ana['Disponible'].sum()
     
-    with col_niv:
-        liquid_opt = {
-            "series": [{
-                "type": 'liquidFill',
-                "data": [porcentaje_llenado, porcentaje_llenado - 0.05],
-                "color": [MAGENTA_PVD, "#d6007d"],
-                "radius": '90%',
-                "amplitude": 10,
-                "backgroundStyle": {"color": "#eee"},
-                "outline": {"borderDistance": 2, "itemStyle": {"borderWidth": 4, "borderColor": AZUL_PVD}},
-                "label": {
-                    "fontSize": 45, 
-                    "color": AZUL_PVD, 
-                    "formatter": f"{porcentaje_llenado*100:.1f}%",
-                    "fontWeight": "900",
-                    "fontFamily": "'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif"
-                }
-            }]
-        }
-        st_echarts(liquid_opt, height="200px")
+    st.markdown(f"""
+        <div style="background:{MAGENTA}; color:white; padding:20px; border-radius:12px; text-align:center; margin-bottom:20px;">
+            <p style="margin:0; font-size: 20px;">Inventario Disponible en {canal_sel}</p>
+            <h1 style="margin:0; font-size: 50px;">{total_disponible:,.0f}</h1>
+        </div>""", unsafe_allow_html=True)
 
-    st.markdown("---")
-    # Gráficos alineados
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.write("#### 🗺️ Cobertura")
-        df_mapa = df_ana.groupby(['Estado', 'lat', 'lon'])['Total'].sum().reset_index()
-        fig_map = px.scatter_mapbox(df_mapa, lat="lat", lon="lon", size="Total", color="Estado",
-                                    color_discrete_sequence=px.colors.qualitative.Prism, 
-                                    size_max=25, zoom=3.0, mapbox_style="carto-positron")
-        fig_map.update_layout(height=400, margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False)
-        st.plotly_chart(fig_map, use_container_width=True)
-    with c2:
-        st.write("#### 📈 Ranking Almacenes")
-        df_bar = df_ana.groupby('Nombre')['Total'].sum().reset_index().sort_values('Total', ascending=True)
-        fig_bar = px.bar(df_bar, x="Total", y="Nombre", orientation='h', color="Nombre", 
-                         color_discrete_sequence=px.colors.qualitative.G10, template="plotly_white")
-        fig_bar.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_bar, use_container_width=True)
-    with c3:
-        st.write("#### 🫧 Campaña vs Canal")
-        df_bubble = df_ana.groupby(['Campaña', 'Canal'])['Total'].sum().reset_index()
-        fig_bubble = px.scatter(df_bubble, x="Campaña", y="Canal", size="Total", color="Campaña",
-                                color_discrete_sequence=px.colors.qualitative.Vivid, 
-                                size_max=45, template="plotly_white")
-        fig_bubble.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_bubble, use_container_width=True)
+    # Gráfica de Barras por Almacén
+    df_viz = df_ana.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
+    fig_bar = px.bar(df_viz, x="Disponible", y="Nombre", orientation='h',
+                     color="Disponible", color_continuous_scale=[[0, AZUL_PROFUNDO], [1, MAGENTA]],
+                     template="plotly_dark")
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-# 7. GESTIÓN DE INVENTARIO
+# 5. VISTA: TABLA MAESTRA (COLUMNA R JUNTO A DISPONIBLE)
 else:
-    st.title("Gestión de Inventario Maestro")
-    col_alm = 'Nombre' if 'Nombre' in df_master.columns else df_master.columns[3]
-    f1, f2, f3, f4 = st.columns(4)
-    with f1: s_c = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with f2: s_a = st.selectbox("Almacén", ["Todos"] + sorted(df_master[col_alm].unique().tolist()))
-    with f3: s_p = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
-    with f4: s_l = st.selectbox("Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
+    st.title("📋 Tabla de Inventario Detallada")
+    
+    # Filtros superiores
+    f1, f2, f3 = st.columns(3)
+    with f1: sel_c = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    with f2: sel_p = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    with f3: sel_l = st.selectbox("Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
 
-    df_f = df_master.copy()
-    if s_c != "Todos": df_f = df_f[df_f['Canal'] == s_c]
-    if s_a != "Todos": df_f = df_f[df_f[col_alm] == s_a]
-    if s_p != "Todas": df_f = df_f[df_f['Campaña'] == s_p]
-    if s_l != "Todas": df_f = df_f[df_f['Clasificación'] == s_l]
+    df_tabla = df_master.copy()
+    if sel_c != "Todos": df_tabla = df_tabla[df_tabla['Canal'] == sel_c]
+    if sel_p != "Todas": df_tabla = df_tabla[df_tabla['Campaña'] == sel_p]
+    if sel_l != "Todas": df_tabla = df_tabla[df_tabla['Clasificación'] == sel_l]
 
-    indices = [2, 3, 4, 7, 8, 9, 10, 11, 17, 16] 
-    cols_vis = [df_master.columns[i] for i in indices if i < len(df_master.columns)]
-    st.dataframe(df_f[cols_vis], use_container_width=True, hide_index=True, height=500)
+    # Selección de columnas: C, D, E, H, I, J, K, L, R, Disponible
+    # Los índices 17 (R) y 18 (Disponible) quedan juntos al final
+    indices_finales = [2, 3, 4, 7, 8, 9, 10, 11, 17, 18]
+    columnas_visibles = [df_master.columns[i] for i in indices_finales if i < len(df_master.columns)]
+
+    st.markdown(f"**Mostrando {len(df_tabla)} registros filtrados:**")
+    st.dataframe(df_tabla[columnas_visibles], use_container_width=True, hide_index=True)
+
+    # Botón de descarga
+    csv = df_tabla[columnas_visibles].to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Descargar Reporte Personalizado", csv, "inventario_pet.csv", "text/csv")
