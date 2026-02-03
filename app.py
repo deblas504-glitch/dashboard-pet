@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import os
 
-# 1. CONFIGURACIÓN Y ESTILO (FRANKLIN GOTHIC DEMI COND)
-st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA")
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO (FRANKLIN GOTHIC DEMI COND)
+st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA - Sistema Maestro")
 
 AZUL_BARRA = "#002d5a" 
 MAGENTA = "#b5006a"
@@ -12,16 +13,28 @@ MAGENTA = "#b5006a"
 st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&display=swap');
+    
     html, body, [class*="st-"] {{
         font-family: "Franklin Gothic Demi Cond", "Franklin Gothic Medium Cond", "Arial Narrow", sans-serif;
     }}
-    [data-testid="stSidebar"] {{ background-color: {AZUL_BARRA}; }}
-    [data-testid="stSidebar"] * {{ color: white !important; }}
-    h1, h2, h3 {{ font-family: "Franklin Gothic Demi Cond", sans-serif !important; }}
+    
+    [data-testid="stSidebar"] {{ 
+        background-color: {AZUL_BARRA}; 
+    }}
+    
+    [data-testid="stSidebar"] * {{ 
+        color: white !important; 
+        font-family: "Franklin Gothic Demi Cond", sans-serif;
+    }}
+
+    h1, h2, h3 {{
+        font-family: "Franklin Gothic Demi Cond", sans-serif !important;
+        font-weight: bold;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. SISTEMA DE ACCESO
+# 2. SISTEMA DE ACCESO (Clave: 12345)
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -44,7 +57,7 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 def load_data():
     df = pd.read_excel(URL)
     df.columns = df.columns.str.strip()
-    # Diccionario de coordenadas corregido (Error efde60.png)
+    # Coordenadas internas para mapas (Sin errores de diccionario)
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
@@ -73,24 +86,13 @@ def draw_liquid_fill(percent):
 # 5. MENÚ LATERAL
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
-    menu = st.radio("Sección:", ["📊 Análisis 360", "📦 Gestión de Inventario", "✨ Nuevas Campañas"])
+    menu = st.radio("Sección del Sistema:", ["📊 Análisis 360", "✨ Nuevas Campañas", "📦 Gestión de Inventario"])
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
 
-# 6. SECCIÓN: NUEVAS CAMPAÑAS
-if menu == "✨ Nuevas Campañas":
-    st.title("✨ Nuevas Campañas")
-    # Filtro automático para campañas 2026 o marcadas específicamente
-    nuevas = [c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)]
-    sel_new = st.multiselect("Filtrar Lanzamientos:", nuevas, default=nuevas[:1] if nuevas else None)
-    
-    df_new = df_master[df_master['Campaña'].isin(sel_new)]
-    st.metric("Inventario Disponible en Campaña", f"{df_new['Disponible'].sum():,.0f}")
-    st.bar_chart(df_new.groupby('Nombre')['Disponible'].sum())
-
-# 7. SECCIÓN: ANÁLISIS 360
-elif menu == "📊 Análisis 360":
+# 6. VISTA: ANÁLISIS 360
+if menu == "📊 Análisis 360":
     st.title("Dashboard de análisis de inventario")
     c1, c2 = st.columns(2)
     with c1: canal = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
@@ -102,10 +104,12 @@ elif menu == "📊 Análisis 360":
 
     cg, ct = st.columns([1, 2])
     with cg:
-        porc = (df_f['Disponible'].sum() / df_master['Disponible'].sum()) * 100 if df_master['Disponible'].sum() > 0 else 0
+        total_g = df_master['Disponible'].sum()
+        total_f = df_f['Disponible'].sum()
+        porc = (total_f / total_g) * 100 if total_g > 0 else 0
         st.components.v1.html(draw_liquid_fill(porc), height=280)
     with ct:
-        st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><h1 style='font-size: 80px; margin:0;'>{df_f['Disponible'].sum():,.0f}</h1></div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -118,77 +122,56 @@ elif menu == "📊 Análisis 360":
         st.write("🟣 **Campaña vs Canal**")
         st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
 
-# 8. SECCIÓN: GESTIÓN DE INVENTARIO
+# 7. VISTA: NUEVAS CAMPAÑAS (CATÁLOGO ESTILO WALMART)
+elif menu == "✨ Nuevas Campañas":
+    st.title("✨ Catálogo Visual de Lanzamientos")
+    
+    search_cat = st.text_input("🔍 Buscar por SKU o Descripción", placeholder="Ej: MAR100...")
+    nuevas = ["Todas"] + sorted([c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)])
+    sel_new = st.selectbox("Filtrar Campaña:", nuevas)
+    
+    df_cat = df_master.copy()
+    if sel_new != "Todas": df_cat = df_cat[df_cat['Campaña'] == sel_new]
+    if search_cat: df_cat = df_cat[df_cat['Descripción'].str.contains(search_cat, case=False, na=False) | df_cat['código'].str.contains(search_cat, case=False, na=False)]
+
+    st.markdown("---")
+    if not df_cat.empty:
+        cols_grid = st.columns(3)
+        for index, (i, row) in enumerate(df_cat.iterrows()):
+            with cols_grid[index % 3]:
+                with st.container(border=True):
+                    # AMARRE DE IMAGEN: Busca en carpeta 'fotos' por SKU
+                    ruta_img = f"fotos/{row['código']}.jpg"
+                    if os.path.exists(ruta_img):
+                        st.image(ruta_img, use_container_width=True)
+                    else:
+                        st.image("https://via.placeholder.com/300x200?text=SIN+FOTO", use_container_width=True)
+                    
+                    st.markdown(f"### {row['Descripción']}")
+                    st.write(f"**SKU:** `{row['código']}`")
+                    st.write(f"📍 **Almacén:** {row['Nombre']}")
+                    
+                    ci1, ci2 = st.columns(2)
+                    ci1.metric("Disponible", f"{row['Disponible']:,.0f}")
+                    ci2.metric("Apartados", f"{row['Apartados']:,.0f}")
+                    
+                    if st.button("➕ Agregar al pedido", key=f"btn_{row['código']}_{index}"):
+                        st.success(f"Producto {row['código']} agregado.")
+    else:
+        st.warning("No se encontraron productos.")
+
+# 8. VISTA: GESTIÓN DE INVENTARIO (TABLA TÉCNICA)
 else:
     st.title("📦 Gestión de Inventario")
-    # Filtros originales restaurados
-    r1c1, r1c2 = st.columns([1, 2])
-    with r1c1: sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
-    with r1c2: search = st.text_input("Buscador", placeholder="Search...")
+    r1, r2 = st.columns([1, 2])
+    with r1: sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
+    with r2: search_t = st.text_input("Buscador", placeholder="Search...")
     
     df_t = df_master.copy()
     if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
-    if search: df_t = df_t[df_t['Descripción'].str.contains(search, case=False, na=False)]
+    if search_t: df_t = df_t[df_t['Descripción'].str.contains(search_t, case=False, na=False)]
 
-    # Columnas: C a L y Q (Apartados antes de Disponible)
-    cols = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
-    st.dataframe(df_t[cols], use_container_width=True, hide_index=True)
-    # ... (Todo el código anterior de carga de datos y Análisis 360 se mantiene igual)
-
-# 7. SECCIÓN: NUEVAS CAMPAÑAS (CATÁLOGO VISUAL)
-if menu == "✨ Nuevas Campañas":
-    st.title("✨ Catálogo Visual de Lanzamientos")
-    
-    # Buscador específico para el catálogo
-    search_cat = st.text_input("🔍 Buscar producto por descripción o código", placeholder="Ej: BOTADERO...")
-    
-    # Filtro de Campaña para segmentar el catálogo
-    nuevas = ["Todas"] + sorted([c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)])
-    sel_new = st.selectbox("Filtrar por Lanzamiento:", nuevas)
-    
-    df_cat = df_master.copy()
-    if sel_new != "Todas":
-        df_cat = df_cat[df_cat['Campaña'] == sel_new]
-    if search_cat:
-        df_cat = df_cat[df_cat['Descripción'].str.contains(search_cat, case=False, na=False) | 
-                        df_cat['código'].str.contains(search_cat, case=False, na=False)]
-
-    st.markdown("---")
-
-    # Generar el catálogo en cuadrícula
-    if not df_cat.empty:
-        cols_visual = st.columns(3) # 3 productos por fila
-        for index, (i, row) in enumerate(df_cat.iterrows()):
-            with cols_visual[index % 3]:
-                # Marco de tarjeta para cada producto
-                with st.container(border=True):
-                    # Lógica de imagen: busca por código de producto
-                    # Reemplaza el link por tu carpeta local si prefieres: f"fotos/{row['código']}.jpg"
-                    st.image("https://via.placeholder.com/300x200?text=IMAGEN+PRODUCTO", use_container_width=True)
-                    
-                    st.markdown(f"### {row['Descripción']}")
-                    st.markdown(f"**SKU:** `{row['código']}`")
-                    
-                    # Indicadores de Inventario con colores
-                    col_inf1, col_inf2 = st.columns(2)
-                    with col_inf1:
-                        st.caption("Disponible")
-                        st.subheader(f"{row['Disponible']:,.0f}")
-                    with col_inf2:
-                        st.caption("Apartados")
-                        st.subheader(f"{row['Apartados']:,.0f}")
-                    
-                    st.write(f"📍 **Ubicación:** {row['Nombre']}")
-                    
-                    # Botón de acción tipo 'Carrito'
-                    if st.button(f"🛒 Consultar {row['código']}", key=f"cat_{row['código']}_{index}"):
-                        st.info(f"Detalle: {row['Clasificación']} - {row['Estado de material']}")
-    else:
-        st.warning("No se encontraron productos con esos criterios.")
-
-# 8. SECCIÓN: GESTIÓN DE INVENTARIO (TABLA TÉCNICA)
-else:
-    # ... (Aquí va tu código de la tabla técnica con las columnas C a Q)
-    st.title("📦 Gestión de Inventario")
-    cols_tabla = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
-    st.dataframe(df_master[cols_tabla], use_container_width=True, hide_index=True)
+    # Columnas exactas C a L y Q (Apartados antes de Disponible)
+    cols_t = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible']
+    st.dataframe(df_t[cols_t], use_container_width=True, hide_index=True)
+    st.download_button("📥 Descargar Reporte CSV", df_t[cols_t].to_csv(index=False).encode('utf-8'), "reporte.csv", "text/csv")
