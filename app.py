@@ -179,13 +179,13 @@ else:
     cols_t = [
         'código',             # C
         'Descripción',        # D
-        'Nombre',             # E
-        'Canal',              # F
-        'Clasificación',      # H
-        'Campaña',            # I
-        'Estado de material', # J
-        'Apartados',          # K
-        'Disponible',         # L
+        'Disponible',         # E
+        'Apartados',          # F
+        'Almacen',            # H
+        'Canal',              # I
+        'Clasificación',      # J
+        'Campaña',            # K
+        'Estado de material', # L
         'Unidad'              # M (Asegúrate de que este nombre sea igual en tu Excel)
     ]
     
