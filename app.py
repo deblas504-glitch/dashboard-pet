@@ -71,7 +71,7 @@ def draw_liquid_fill(percent):
     <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
     """
 
-# 5. MENÚ LATERAL (Gestión de Inventario primero)
+# 5. MENÚ LATERAL
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
     menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
@@ -79,7 +79,7 @@ with st.sidebar:
         st.session_state.autenticado = False
         st.rerun()
 
-# 6. VISTA: GESTIÓN DE INVENTARIO (PRIMERA VENTANA)
+# 6. VISTA: GESTIÓN DE INVENTARIO
 if menu == "📦 Gestión de Inventario":
     st.title("📦 Gestión de Inventario")
     
@@ -108,16 +108,15 @@ if menu == "📦 Gestión de Inventario":
     cols_t = [
         'código',             # C
         'Descripción',        # D
-        'Disponible',             # E
-        'Apartados',              # F
-        'Nombre',      # H
-        'Canal',            # I
-        'Clasificación', # J
-        'Campaña',          # K
-        'Estado de material',         # L
-        'AÑO'                 #Q
+        'Disponible',         # E
+        'Apartados',          # F
+        'Nombre',             # H
+        'Canal',              # I
+        'Clasificación',      # J
+        'Campaña',            # K
+        'Estado de material', # L
+        'AÑO',                # Q (Se agregó la coma faltante aquí)
         'Unidad'              # M
-        
     ]
     
     # Solo mostrar si existen en el DF
