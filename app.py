@@ -181,7 +181,7 @@ else:
         'Descripción',        # D
         'Disponible',         # E
         'Apartados',          # F
-        'Almacen',            # H
+        'Nombre',             # H
         'Canal',              # I
         'Clasificación',      # J
         'Campaña',            # K
