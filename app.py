@@ -159,17 +159,51 @@ elif menu == "✨ Nuevas Campañas":
 
 # 8. VISTA: ANÁLISIS 360
 else:
-    st.title("Dashboard de análisis de inventario")
-    c1, c2 = st.columns(2)
-    with c1: canal = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with c2: camp = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    st.title("📊 Análisis 360 - Dashboard")
     
-    df_f = df_master.copy()
-    if canal != "Todos": df_f = df_f[df_f['Canal'] == canal]
-    if camp != "Todas": df_f = df_f[df_f['Campaña'] == camp]
+    # Filtros para el Dashboard
+    c1, c2 = st.columns(2)
+    with c1: canal_d = st.selectbox("Canal Dashboard", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    with c2: camp_d = st.selectbox("Campaña Dashboard", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    
+    df_d = df_master.copy()
+    if canal_d != "Todos": df_d = df_d[df_d['Canal'] == canal_d]
+    if camp_d != "Todas": df_d = df_d[df_d['Campaña'] == camp_d]
 
-    total_g = df_master['Disponible'].sum()
-    total_f = df_f['Disponible'].sum()
-    porc = (total_f / total_g) * 100 if total_g > 0 else 0
-    st.components.v1.html(draw_liquid_fill(porc), height=280)
-    st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white;'><h1 style='font-size: 80px;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
+    # Primera fila: Indicador de Agua y Total
+    col_dash1, col_dash2 = st.columns([1, 2])
+    with col_dash1:
+        total_g = df_master['Disponible'].sum()
+        total_f = df_d['Disponible'].sum()
+        porc = (total_f / total_g * 100) if total_g > 0 else 0
+        st.components.v1.html(draw_liquid_fill(porc), height=280)
+    
+    with col_dash2:
+        st.markdown(f"""
+            <div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'>
+                <p style='margin:0; font-size:20px;'>Inventario Disponible Seleccionado</p>
+                <h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # Segunda fila: Mapa y Gráficas
+    st.markdown("---")
+    g1, g2, g3 = st.columns(3)
+    
+    with g1:
+        st.subheader("🗺️ Cobertura")
+        fig_map = px.scatter_mapbox(df_d, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
+                                   color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
+        st.plotly_chart(fig_map, use_container_width=True)
+        
+    with g2:
+        st.subheader("📊 Ranking Almacenes")
+        df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
+        fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', color="Disponible", 
+                        color_continuous_scale="Blues", height=300)
+        st.plotly_chart(fig_bar, use_container_width=True)
+        
+    with g3:
+        st.subheader("🟣 Campaña vs Canal")
+        fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300)
+        st.plotly_chart(fig_scat, use_container_width=True)
