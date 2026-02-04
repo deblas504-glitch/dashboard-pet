@@ -127,37 +127,16 @@ if menu == "📦 Gestión de Inventario":
 
 # 7. VISTA: NUEVAS CAMPAÑAS
 elif menu == "✨ Nuevas Campañas":
-    st.title("✨ Catálogo Visual de Lanzamientos")
-    search_cat = st.text_input("🔍 Buscar por SKU o Descripción", placeholder="Ej: MAR100...")
-    nuevas = ["Todas"] + sorted([c for c in df_master['Campaña'].unique() if "2026" in str(c) or "NOVA" in str(c)])
-    sel_new = st.selectbox("Filtrar Campaña:", nuevas)
+    st.title("✨ Nuevas Campañas")
     
-    df_cat = df_master.copy()
-    if sel_new != "Todas": df_cat = df_cat[df_cat['Campaña'] == sel_new]
-    if search_cat: df_cat = df_cat[df_cat['Descripción'].str.contains(search_cat, case=False, na=False) | df_cat['código'].str.contains(search_cat, case=False, na=False)]
-
+    # Este espacio queda reservado
     st.markdown("---")
-    if not df_cat.empty:
-        cols_grid = st.columns(3)
-        for index, (i, row) in enumerate(df_cat.iterrows()):
-            with cols_grid[index % 3]:
-                with st.container(border=True):
-                    sku_limpio = str(row['código']).strip()
-                    ruta_img = None
-                    for ext in ['.jpg', '.png', '.jpeg', '.JPG', '.PNG']:
-                        path_p = os.path.join("IMAGENES", f"{sku_limpio}{ext}")
-                        if os.path.exists(path_p): ruta_img = path_p; break
-                    
-                    if ruta_img: st.image(ruta_img, use_container_width=True)
-                    else: st.image("https://via.placeholder.com/300x200?text=SIN+FOTO", use_container_width=True)
-                    
-                    st.markdown(f"### {row['Descripción']}")
-                    st.write(f"**SKU:** `{sku_limpio}`")
-                    ci1, ci2 = st.columns(2)
-                    ci1.metric("Disp.", f"{row['Disponible']:,.0f}")
-                    ci2.metric("Apart.", f"{row['Apartados']:,.0f}")
-                    if st.button("➕ Agregar", key=f"btn_{sku_limpio}_{index}"): st.success("Agregado")
-
+    st.info("📦 **Sección en preparación.** Estamos a la espera de los datos y materiales para los próximos lanzamientos.")
+    
+    # Opcional: Un diseño minimalista para que no se sienta "roto"
+    c1, c2, c3 = st.columns(3)
+    with c2:
+        st.image("https://via.placeholder.com/400x300?text=PROXIMAMENTE", use_container_width=True)
 # 8. VISTA: ANÁLISIS 360
 else:
     st.title("📊 Análisis 360 - Dashboard")
