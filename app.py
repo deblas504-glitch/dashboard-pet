@@ -3,9 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
-import datetime
 
-# 1. CONFIGURACIÓN Y ESTILO (FRANKLIN GOTHIC DEMI COND)
+# 1. CONFIGURACIÓN Y ESTILO
 st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA - Dashboard")
 
 AZUL_BARRA = "#002d5a" 
@@ -20,13 +19,11 @@ st.markdown(f"""
     [data-testid="stSidebar"] {{ background-color: {AZUL_BARRA}; }}
     [data-testid="stSidebar"] * {{ color: white !important; font-family: "Franklin Gothic Demi Cond", sans-serif; }}
     h1, h2, h3 {{ font-family: "Franklin Gothic Demi Cond", sans-serif !important; font-weight: bold; }}
-    
-    /* Optimización para móviles */
     div[data-testid="stDataFrame"] > div {{ overflow-x: auto; }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. SISTEMA DE ACCESO (Clave: 12345)
+# 2. SISTEMA DE ACCESO
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -74,7 +71,7 @@ def draw_liquid_fill(percent):
     <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
     """
 
-# 5. MENÚ LATERAL (Orden cambiado: Gestión es el índice 0)
+# 5. MENÚ LATERAL (Gestión de Inventario primero)
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
     menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
@@ -82,7 +79,7 @@ with st.sidebar:
         st.session_state.autenticado = False
         st.rerun()
 
-# 6. VISTA: GESTIÓN DE INVENTARIO (AHORA ES LA PRIMERA)
+# 6. VISTA: GESTIÓN DE INVENTARIO (PRIMERA VENTANA)
 if menu == "📦 Gestión de Inventario":
     st.title("📦 Gestión de Inventario")
     
@@ -107,12 +104,25 @@ if menu == "📦 Gestión de Inventario":
     if sel_ca != "Todas": df_t = df_t[df_t['Campaña'] == sel_ca]
     if sel_cn != "Todas": df_t = df_t[df_t['Canal'] == sel_cn]
 
-    # Orden exacto C, D, E, F, H, I, J, K, L, M
-    cols_t = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible', 'Unidad']
+    # --- ORDEN ESTRICTO DE COLUMNAS (C, D, E, F, H, I, J, K, L, M) ---
+    cols_t = [
+        'código',             # C
+        'Descripción',        # D
+        'Disponible',             # E
+        'Apartados',              # F
+        'Nombre',      # H
+        'Canal',            # I
+        'Clasificación', # J
+        'Campaña',          # K
+        'Estado de material',         # L
+        'Unidad'              # M
+    ]
+    
+    # Solo mostrar si existen en el DF
     cols_validas = [c for c in cols_t if c in df_t.columns]
 
     st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
-    st.download_button("📥 Descargar Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "reporte_logistica.csv", "text/csv")
+    st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 7. VISTA: NUEVAS CAMPAÑAS
 elif menu == "✨ Nuevas Campañas":
@@ -146,7 +156,6 @@ elif menu == "✨ Nuevas Campañas":
                     ci1.metric("Disp.", f"{row['Disponible']:,.0f}")
                     ci2.metric("Apart.", f"{row['Apartados']:,.0f}")
                     if st.button("➕ Agregar", key=f"btn_{sku_limpio}_{index}"): st.success("Agregado")
-    else: st.warning("No hay productos.")
 
 # 8. VISTA: ANÁLISIS 360
 else:
@@ -159,22 +168,8 @@ else:
     if canal != "Todos": df_f = df_f[df_f['Canal'] == canal]
     if camp != "Todas": df_f = df_f[df_f['Campaña'] == camp]
 
-    cg, ct = st.columns([1, 2])
-    with cg:
-        total_g = df_master['Disponible'].sum()
-        total_f = df_f['Disponible'].sum()
-        porc = (total_f / total_g) * 100 if total_g > 0 else 0
-        st.components.v1.html(draw_liquid_fill(porc), height=280)
-    with ct:
-        st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write("🗺️ **Cobertura**")
-        st.plotly_chart(px.scatter_mapbox(df_f, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible", color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300), use_container_width=True)
-    with col2:
-        st.write("📊 **Ranking Almacenes**")
-        st.plotly_chart(px.bar(df_f.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible'), x="Disponible", y="Nombre", orientation='h', color="Disponible", color_continuous_scale="Blues", height=300), use_container_width=True)
-    with col3:
-        st.write("🟣 **Campaña vs Canal**")
-        st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
+    total_g = df_master['Disponible'].sum()
+    total_f = df_f['Disponible'].sum()
+    porc = (total_f / total_g) * 100 if total_g > 0 else 0
+    st.components.v1.html(draw_liquid_fill(porc), height=280)
+    st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white;'><h1 style='font-size: 80px;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
