@@ -31,7 +31,7 @@ if not st.session_state.autenticado:
     st.title("🔐 Acceso PVD LOGÍSTICA")
     clave = st.text_input("Contraseña:", type="password")
     if st.button("Entrar"):
-        if clave == "12345":
+        if clave == "MARSPET2026":
             st.session_state.autenticado = True
             st.rerun()
         else:
