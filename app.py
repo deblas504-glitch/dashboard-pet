@@ -34,14 +34,14 @@ if not st.session_state.autenticado:
     st.title("🔐 Acceso PVD LOGÍSTICA")
     clave = st.text_input("Contraseña:", type="password")
     if st.button("Entrar"):
-        if clave == "MARSPET2026":
+        if clave == "12345":
             st.session_state.autenticado = True
             st.rerun()
         else:
             st.error("Clave incorrecta")
     st.stop()
 
-# 3. CARGA DE DATOS (CORREGIDA)
+# 3. CARGA DE DATOS
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
@@ -49,7 +49,6 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 def load_data():
     df = pd.read_excel(URL)
     df.columns = df.columns.str.strip()
-    # Coordenadas internas corregidas (Evita error efde60.png)
     coords = {
         'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
         'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
@@ -60,7 +59,7 @@ def load_data():
 
 df_master = load_data()
 
-# 4. FUNCIÓN LIQUID FILL (OLEAJE ANIMADO)
+# 4. FUNCIÓN LIQUID FILL
 def draw_liquid_fill(percent):
     level = 100 - percent
     return f"""
@@ -75,46 +74,47 @@ def draw_liquid_fill(percent):
     <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
     """
 
-# 5. MENÚ LATERAL
+# 5. MENÚ LATERAL (Orden cambiado: Gestión es el índice 0)
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
-    menu = st.radio("Sección del Sistema:", ["📊 Análisis 360", "✨ Nuevas Campañas", "📦 Gestión de Inventario"])
+    menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
 
-# 6. VISTA: ANÁLISIS 360 (DASHBOARD)
-if menu == "📊 Análisis 360":
-    st.title("Dashboard de análisis de inventario")
-    c1, c2 = st.columns(2)
-    with c1: canal_s = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
-    with c2: camp_s = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+# 6. VISTA: GESTIÓN DE INVENTARIO (AHORA ES LA PRIMERA)
+if menu == "📦 Gestión de Inventario":
+    st.title("📦 Gestión de Inventario")
     
-    df_f = df_master.copy()
-    if canal_s != "Todos": df_f = df_f[df_f['Canal'] == canal_s]
-    if camp_s != "Todas": df_f = df_f[df_f['Campaña'] == camp_s]
+    r1c1, r1c2 = st.columns([1, 2])
+    with r1c1: 
+        sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
+    with r1c2: 
+        search_t = st.text_input("Buscador Descripción / SKU", placeholder="Escribe para buscar...")
 
-    cg, ct = st.columns([1, 2])
-    with cg:
-        total_g = df_master['Disponible'].sum()
-        total_f = df_f['Disponible'].sum()
-        porc = (total_f / total_g) * 100 if total_g > 0 else 0
-        st.components.v1.html(draw_liquid_fill(porc), height=280)
-    with ct:
-        st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
+    r2c1, r2c2, r2c3 = st.columns(3)
+    with r2c1: 
+        sel_cl = st.selectbox("Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
+    with r2c2: 
+        sel_ca = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
+    with r2c3: 
+        sel_cn = st.selectbox("Canal", ["Todas"] + sorted(df_master['Canal'].unique().tolist()))
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write("🗺️ **Cobertura**")
-        st.plotly_chart(px.scatter_mapbox(df_f, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible", color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300), use_container_width=True)
-    with col2:
-        st.write("📊 **Ranking Almacenes**")
-        st.plotly_chart(px.bar(df_f.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible'), x="Disponible", y="Nombre", orientation='h', color="Disponible", color_continuous_scale="Blues", height=300), use_container_width=True)
-    with col3:
-        st.write("🟣 **Campaña vs Canal**")
-        st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
+    df_t = df_master.copy()
+    if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
+    if search_t: df_t = df_t[df_t['Descripción'].str.contains(search_t, case=False, na=False) | df_t['código'].str.contains(search_t, case=False, na=False)]
+    if sel_cl != "Todas": df_t = df_t[df_t['Clasificación'] == sel_cl]
+    if sel_ca != "Todas": df_t = df_t[df_t['Campaña'] == sel_ca]
+    if sel_cn != "Todas": df_t = df_t[df_t['Canal'] == sel_cn]
 
-# 7. VISTA: NUEVAS CAMPAÑAS (CATÁLOGO "WALMART" - CARPETA "IMAGENES")
+    # Orden exacto C, D, E, F, H, I, J, K, L, M
+    cols_t = ['código', 'Descripción', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'Apartados', 'Disponible', 'Unidad']
+    cols_validas = [c for c in cols_t if c in df_t.columns]
+
+    st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
+    st.download_button("📥 Descargar Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "reporte_logistica.csv", "text/csv")
+
+# 7. VISTA: NUEVAS CAMPAÑAS
 elif menu == "✨ Nuevas Campañas":
     st.title("✨ Catálogo Visual de Lanzamientos")
     search_cat = st.text_input("🔍 Buscar por SKU o Descripción", placeholder="Ej: MAR100...")
@@ -148,49 +148,33 @@ elif menu == "✨ Nuevas Campañas":
                     if st.button("➕ Agregar", key=f"btn_{sku_limpio}_{index}"): st.success("Agregado")
     else: st.warning("No hay productos.")
 
-# 8. VISTA: GESTIÓN DE INVENTARIO (FILTROS Y ORDEN C-M)
+# 8. VISTA: ANÁLISIS 360
 else:
-    st.title("📦 Gestión de Inventario")
+    st.title("Dashboard de análisis de inventario")
+    c1, c2 = st.columns(2)
+    with c1: canal = st.selectbox("Canal", ["Todos"] + sorted(df_master['Canal'].unique().tolist()))
+    with c2: camp = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
     
-    # --- FILTROS HORIZONTALES RESTAURADOS ---
-    r1c1, r1c2 = st.columns([1, 2])
-    with r1c1: 
-        sel_alm = st.selectbox("Almacén", ["Todas"] + sorted(df_master['Nombre'].unique().tolist()))
-    with r1c2: 
-        search_t = st.text_input("Buscador Descripción / SKU", placeholder="Escribe para buscar...")
+    df_f = df_master.copy()
+    if canal != "Todos": df_f = df_f[df_f['Canal'] == canal]
+    if camp != "Todas": df_f = df_f[df_f['Campaña'] == camp]
 
-    r2c1, r2c2, r2c3 = st.columns(3)
-    with r2c1: 
-        sel_cl = st.selectbox("Clasificación", ["Todas"] + sorted(df_master['Clasificación'].unique().tolist()))
-    with r2c2: 
-        sel_ca = st.selectbox("Campaña", ["Todas"] + sorted(df_master['Campaña'].unique().tolist()))
-    with r2c3: 
-        sel_cn = st.selectbox("Canal", ["Todas"] + sorted(df_master['Canal'].unique().tolist()))
+    cg, ct = st.columns([1, 2])
+    with cg:
+        total_g = df_master['Disponible'].sum()
+        total_f = df_f['Disponible'].sum()
+        porc = (total_f / total_g) * 100 if total_g > 0 else 0
+        st.components.v1.html(draw_liquid_fill(porc), height=280)
+    with ct:
+        st.markdown(f"<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>", unsafe_allow_html=True)
 
-    # Lógica de filtrado
-    df_t = df_master.copy()
-    if sel_alm != "Todas": df_t = df_t[df_t['Nombre'] == sel_alm]
-    if search_t: df_t = df_t[df_t['Descripción'].str.contains(search_t, case=False, na=False) | df_t['código'].str.contains(search_t, case=False, na=False)]
-    if sel_cl != "Todas": df_t = df_t[df_t['Clasificación'] == sel_cl]
-    if sel_ca != "Todas": df_t = df_t[df_t['Campaña'] == sel_ca]
-    if sel_cn != "Todas": df_t = df_t[df_t['Canal'] == sel_cn]
-
-    # --- ORDEN ESTRICTO DE COLUMNAS (C, D, E, F, H, I, J, K, L, M) ---
-    cols_t = [
-        'código',             # C
-        'Descripción',        # D
-        'Disponible',         # E
-        'Apartados',          # F
-        'Nombre',             # H
-        'Canal',              # I
-        'Clasificación',      # J
-        'Campaña',            # K
-        'Estado de material', # L
-        'Unidad'              # M (Asegúrate de que este nombre sea igual en tu Excel)
-    ]
-    
-    # Validar columnas existentes
-    cols_validas = [c for c in cols_t if c in df_t.columns]
-
-    st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
-    st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.write("🗺️ **Cobertura**")
+        st.plotly_chart(px.scatter_mapbox(df_f, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible", color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300), use_container_width=True)
+    with col2:
+        st.write("📊 **Ranking Almacenes**")
+        st.plotly_chart(px.bar(df_f.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible'), x="Disponible", y="Nombre", orientation='h', color="Disponible", color_continuous_scale="Blues", height=300), use_container_width=True)
+    with col3:
+        st.write("🟣 **Campaña vs Canal**")
+        st.plotly_chart(px.scatter(df_f, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300), use_container_width=True)
