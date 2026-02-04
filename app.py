@@ -104,7 +104,7 @@ if menu == "📦 Gestión de Inventario":
     if sel_ca != "Todas": df_t = df_t[df_t['Campaña'] == sel_ca]
     if sel_cn != "Todas": df_t = df_t[df_t['Canal'] == sel_cn]
 
-    # --- ORDEN ESTRICTO DE COLUMNAS (C, D, E, F, H, I, J, K, L, M) ---
+    # --- ORDEN ESTRICTO DE COLUMNAS (C, D, E, F, H, I, J, K, L, Q, M) ---
     cols_t = [
         'código',             # C
         'Descripción',        # D
@@ -115,7 +115,9 @@ if menu == "📦 Gestión de Inventario":
         'Clasificación', # J
         'Campaña',          # K
         'Estado de material',         # L
+        'AÑO'                 #Q
         'Unidad'              # M
+        
     ]
     
     # Solo mostrar si existen en el DF
