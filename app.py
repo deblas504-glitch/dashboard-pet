@@ -44,17 +44,20 @@ URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
 @st.cache_data(ttl=30)
 def load_data():
-    df = pd.read_excel(URL)
-    # Limpiamos espacios en blanco en los nombres de las columnas para evitar KeyErrors
-    df.columns = df.columns.str.strip()
-    
-    coords = {
-        'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
-        'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
-        'lon_i': [-102.28, -115.28, -111.66, -90.53, -93.12, -106.06, -99.13, -101.70, -103.72, -104.65, -99.10, -101.25, -99.54, -98.76, -103.34, -101.18, -99.23, -104.89, -100.31, -96.72, -98.20, -100.38, -88.47, -100.98, -107.39, -110.96, -92.61, -99.14, -98.23, -96.13, -89.59, -102.58]
-    }
-    df_coords = pd.DataFrame(coords)
-    return pd.merge(df, df_coords, on='Estado', how='left')
+    try:
+        df = pd.read_excel(URL)
+        df.columns = df.columns.astype(str).str.strip()
+        
+        coords = {
+            'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
+            'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
+            'lon_i': [-102.28, -115.28, -111.66, -90.53, -93.12, -106.06, -99.13, -101.70, -103.72, -104.65, -99.10, -101.25, -99.54, -98.76, -103.34, -101.18, -99.23, -104.89, -100.31, -96.72, -98.20, -100.38, -88.47, -100.98, -107.39, -110.96, -92.61, -99.14, -98.23, -96.13, -89.59, -102.58]
+        }
+        df_coords = pd.DataFrame(coords)
+        return pd.merge(df, df_coords, on='Estado', how='left')
+    except Exception as e:
+        st.error(f"Error al cargar Excel: {e}")
+        return pd.DataFrame()
 
 df_master = load_data()
 
@@ -73,10 +76,12 @@ def draw_liquid_fill(percent):
     <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
     """
 
-# --- FUNCIÓN AUXILIAR PARA EVITAR ERRORES EN SELECTBOX ---
-def get_options(df, column_name):
+# --- FUNCIÓN AUXILIAR CORREGIDA ---
+def get_options(df, column_name, first_option="Todas"):
     if column_name in df.columns:
-        return ["Todas"] + sorted(df[column_name].dropna().unique().astype(str).tolist())
+        # Extraemos valores únicos, quitamos nulos, convertimos a string y ordenamos
+        vals = sorted(df[column_name].dropna().unique().astype(str).tolist())
+        return [first_option] + vals
     return ["Columna no encontrada"]
 
 # 5. MENÚ LATERAL
@@ -91,33 +96,37 @@ with st.sidebar:
 if menu == "📦 Gestión de Inventario":
     st.title("📦 Gestión de Inventario")
     
-    r1c1, r1c2 = st.columns([1, 2])
-    with r1c1: 
-        # Aquí corregimos el error asegurando que la columna existe y no tiene nulos
-        sel_alm = st.selectbox("Almacén", get_options(df_master, 'Nombre'))
-    with r1c2: 
-        search_t = st.text_input("Buscador Descripción / SKU", placeholder="Escribe para buscar...")
+    if df_master.empty:
+        st.warning("No hay datos cargados.")
+    else:
+        r1c1, r1c2 = st.columns([1, 2])
+        with r1c1: 
+            sel_alm = st.selectbox("Almacén", get_options(df_master, 'Nombre'))
+        with r1c2: 
+            search_t = st.text_input("Buscador Descripción / SKU", placeholder="Escribe para buscar...")
 
-    r2c1, r2c2, r2c3 = st.columns(3)
-    with r2c1: 
-        sel_cl = st.selectbox("Clasificación", get_options(df_master, 'Clasificación'))
-    with r2c2: 
-        sel_ca = st.selectbox("Campaña", get_options(df_master, 'Campaña'))
-    with r2c3: 
-        sel_cn = st.selectbox("Canal", get_options(df_master, 'Canal'))
+        r2c1, r2c2, r2c3 = st.columns(3)
+        with r2c1: 
+            sel_cl = st.selectbox("Clasificación", get_options(df_master, 'Clasificación'))
+        with r2c2: 
+            sel_ca = st.selectbox("Campaña", get_options(df_master, 'Campaña'))
+        with r2c3: 
+            sel_cn = st.selectbox("Canal", get_options(df_master, 'Canal'))
 
-    df_t = df_master.copy()
-    if sel_alm != "Todas": df_t = df_t[df_t['Nombre'].astype(str) == sel_alm]
-    if search_t: df_t = df_t[df_t['Descripción'].str.contains(search_t, case=False, na=False) | df_t['código'].astype(str).str.contains(search_t, case=False, na=False)]
-    if sel_cl != "Todas": df_t = df_t[df_t['Clasificación'].astype(str) == sel_cl]
-    if sel_ca != "Todas": df_t = df_t[df_t['Campaña'].astype(str) == sel_ca]
-    if sel_cn != "Todas": df_t = df_t[df_t['Canal'].astype(str) == sel_cn]
+        df_t = df_master.copy()
+        if sel_alm != "Todas": df_t = df_t[df_t['Nombre'].astype(str) == sel_alm]
+        if search_t: 
+            df_t = df_t[df_t['Descripción'].astype(str).str.contains(search_t, case=False, na=False) | 
+                        df_t['código'].astype(str).str.contains(search_t, case=False, na=False)]
+        if sel_cl != "Todas": df_t = df_t[df_t['Clasificación'].astype(str) == sel_cl]
+        if sel_ca != "Todas": df_t = df_t[df_t['Campaña'].astype(str) == sel_ca]
+        if sel_cn != "Todas": df_t = df_t[df_t['Canal'].astype(str) == sel_cn]
 
-    cols_t = ['código', 'Descripción', 'Disponible', 'Apartados', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
-    cols_validas = [c for c in cols_t if c in df_t.columns]
+        cols_t = ['código', 'Descripción', 'Disponible', 'Apartados', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
+        cols_validas = [c for c in cols_t if c in df_t.columns]
 
-    st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
-    st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
+        st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
+        st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 7. VISTA: NUEVAS CAMPAÑAS
 elif menu == "✨ Nuevas Campañas":
@@ -132,48 +141,53 @@ elif menu == "✨ Nuevas Campañas":
 else:
     st.title("📊 Análisis 360 - Dashboard")
     
-    c1, c2 = st.columns(2)
-    with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal').replace("Todas", "Todos"))
-    with c2: camp_d = st.selectbox("Campaña Dashboard", get_options(df_master, 'Campaña'))
-    
-    df_d = df_master.copy()
-    if canal_d not in ["Todos", "Todas"]: df_d = df_d[df_d['Canal'].astype(str) == canal_d]
-    if camp_d != "Todas": df_d = df_d[df_d['Campaña'].astype(str) == camp_d]
-
-    col_dash1, col_dash2 = st.columns([1, 2])
-    with col_dash1:
-        total_g = df_master['Disponible'].sum()
-        total_f = df_d['Disponible'].sum()
-        porc = (total_f / total_g * 100) if total_g > 0 else 0
-        st.components.v1.html(draw_liquid_fill(porc), height=280)
-    
-    with col_dash2:
-        st.markdown(f"""
-            <div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'>
-                <p style='margin:0; font-size:20px;'>Inventario Disponible Seleccionado</p>
-                <h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1>
-            </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
-    g1, g2, g3 = st.columns(3)
-    
-    with g1:
-        st.subheader("🗺️ Cobertura")
-        if 'lat_i' in df_d.columns:
-            fig_map = px.scatter_mapbox(df_d, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
-                                       color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
-            st.plotly_chart(fig_map, use_container_width=True)
+    if df_master.empty:
+        st.warning("No hay datos cargados.")
+    else:
+        # CORRECCIÓN AQUÍ: Usamos el parámetro first_option en lugar de .replace()
+        c1, c2 = st.columns(2)
+        with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal', first_option="Todos"))
+        with c2: camp_d = st.selectbox("Campaña Dashboard", get_options(df_master, 'Campaña'))
         
-    with g2:
-        st.subheader("📊 Ranking Almacenes")
-        if 'Nombre' in df_d.columns:
-            df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
-            fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', color="Disponible", 
-                            color_continuous_scale="Blues", height=300)
-            st.plotly_chart(fig_bar, use_container_width=True)
+        df_d = df_master.copy()
+        if canal_d not in ["Todos", "Todas"]: df_d = df_d[df_d['Canal'].astype(str) == canal_d]
+        if camp_d != "Todas": df_d = df_d[df_d['Campaña'].astype(str) == camp_d]
+
+        col_dash1, col_dash2 = st.columns([1, 2])
+        with col_dash1:
+            total_g = df_master['Disponible'].sum() if 'Disponible' in df_master.columns else 0
+            total_f = df_d['Disponible'].sum() if 'Disponible' in df_d.columns else 0
+            porc = (total_f / total_g * 100) if total_g > 0 else 0
+            st.components.v1.html(draw_liquid_fill(porc), height=280)
         
-    with g3:
-        st.subheader("🟣 Campaña vs Canal")
-        fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300)
-        st.plotly_chart(fig_scat, use_container_width=True)
+        with col_dash2:
+            st.markdown(f"""
+                <div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'>
+                    <p style='margin:0; font-size:20px;'>Inventario Disponible Seleccionado</p>
+                    <h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1>
+                </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        g1, g2, g3 = st.columns(3)
+        
+        with g1:
+            st.subheader("🗺️ Cobertura")
+            if 'lat_i' in df_d.columns and 'lon_i' in df_d.columns:
+                fig_map = px.scatter_mapbox(df_d, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
+                                           color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
+                st.plotly_chart(fig_map, use_container_width=True)
+            
+        with g2:
+            st.subheader("📊 Ranking Almacenes")
+            if 'Nombre' in df_d.columns:
+                df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
+                fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', color="Disponible", 
+                                color_continuous_scale="Blues", height=300)
+                st.plotly_chart(fig_bar, use_container_width=True)
+            
+        with g3:
+            st.subheader("🟣 Campaña vs Canal")
+            if 'Campaña' in df_d.columns and 'Canal' in df_d.columns:
+                fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300)
+                st.plotly_chart(fig_scat, use_container_width=True)
