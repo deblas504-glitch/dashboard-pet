@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import os
 
 # 1. CONFIGURACIÓN Y ESTILO
 st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA - Dashboard")
@@ -56,7 +55,7 @@ def load_data():
         df_coords = pd.DataFrame(coords)
         return pd.merge(df, df_coords, on='Estado', how='left')
     except Exception as e:
-        st.error(f"Error al cargar Excel: {e}")
+        st.error(f"Error al cargar datos: {e}")
         return pd.DataFrame()
 
 df_master = load_data()
@@ -76,15 +75,14 @@ def draw_liquid_fill(percent):
     <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
     """
 
-# --- FUNCIÓN AUXILIAR CORREGIDA ---
+# 5. FUNCIÓN AUXILIAR SELECTBOX
 def get_options(df, column_name, first_option="Todas"):
     if column_name in df.columns:
-        # Extraemos valores únicos, quitamos nulos, convertimos a string y ordenamos
         vals = sorted(df[column_name].dropna().unique().astype(str).tolist())
         return [first_option] + vals
-    return ["Columna no encontrada"]
+    return [first_option]
 
-# 5. MENÚ LATERAL
+# 6. MENÚ LATERAL
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
     menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
@@ -92,13 +90,11 @@ with st.sidebar:
         st.session_state.autenticado = False
         st.rerun()
 
-# 6. VISTA: GESTIÓN DE INVENTARIO
+# 7. VISTA: GESTIÓN DE INVENTARIO
 if menu == "📦 Gestión de Inventario":
     st.title("📦 Gestión de Inventario")
     
-    if df_master.empty:
-        st.warning("No hay datos cargados.")
-    else:
+    if not df_master.empty:
         r1c1, r1c2 = st.columns([1, 2])
         with r1c1: 
             sel_alm = st.selectbox("Almacén", get_options(df_master, 'Nombre'))
@@ -128,31 +124,25 @@ if menu == "📦 Gestión de Inventario":
         st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
         st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
-# 7. VISTA: NUEVAS CAMPAÑAS
+# 8. VISTA: NUEVAS CAMPAÑAS
 elif menu == "✨ Nuevas Campañas":
     st.title("✨ Nuevas Campañas")
-    st.markdown("---")
-    st.info("📦 **Sección en preparación.** Estamos a la espera de los datos y materiales para los próximos lanzamientos.")
-    c1, c2, c3 = st.columns(3)
-    with c2:
-        st.image("https://via.placeholder.com/400x300?text=PROXIMAMENTE", use_container_width=True)
+    st.info("📦 Sección en preparación.")
 
-# 8. VISTA: ANÁLISIS 360
+# 9. VISTA: ANÁLISIS 360
 else:
     st.title("📊 Análisis 360 - Dashboard")
     
-    if df_master.empty:
-        st.warning("No hay datos cargados.")
-    else:
-        # CORRECCIÓN AQUÍ: Usamos el parámetro first_option en lugar de .replace()
+    if not df_master.empty:
         c1, c2 = st.columns(2)
-        with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal', first_option="Todos"))
+        with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal', "Todos"))
         with c2: camp_d = st.selectbox("Campaña Dashboard", get_options(df_master, 'Campaña'))
         
         df_d = df_master.copy()
         if canal_d not in ["Todos", "Todas"]: df_d = df_d[df_d['Canal'].astype(str) == canal_d]
         if camp_d != "Todas": df_d = df_d[df_d['Campaña'].astype(str) == camp_d]
 
+        # KPIs
         col_dash1, col_dash2 = st.columns([1, 2])
         with col_dash1:
             total_g = df_master['Disponible'].sum() if 'Disponible' in df_master.columns else 0
@@ -161,33 +151,32 @@ else:
             st.components.v1.html(draw_liquid_fill(porc), height=280)
         
         with col_dash2:
-            st.markdown(f"""
-                <div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'>
-                    <p style='margin:0; font-size:20px;'>Inventario Disponible Seleccionado</p>
-                    <h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0; font-size:20px;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>""", unsafe_allow_html=True)
 
         st.markdown("---")
         g1, g2, g3 = st.columns(3)
         
         with g1:
             st.subheader("🗺️ Cobertura")
-            if 'lat_i' in df_d.columns and 'lon_i' in df_d.columns:
-                fig_map = px.scatter_mapbox(df_d, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
-                                           color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
-                st.plotly_chart(fig_map, use_container_width=True)
+            # Limpieza crítica para el mapa para evitar el error de Plotly
+            df_mapa = df_d.dropna(subset=['lat_i', 'lon_i', 'Disponible'])
+            if not df_mapa.empty:
+                try:
+                    fig_map = px.scatter_mapbox(df_mapa, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
+                                               color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
+                    st.plotly_chart(fig_map, use_container_width=True)
+                except: st.warning("Error en datos de coordenadas.")
+            else: st.write("Sin datos geográficos.")
             
         with g2:
-            st.subheader("📊 Ranking Almacenes")
-            if 'Nombre' in df_d.columns:
+            st.subheader("📊 Almacenes")
+            if 'Nombre' in df_d.columns and not df_d.empty:
                 df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
-                fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', color="Disponible", 
-                                color_continuous_scale="Blues", height=300)
+                fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', height=300)
                 st.plotly_chart(fig_bar, use_container_width=True)
-            
+        
         with g3:
-            st.subheader("🟣 Campaña vs Canal")
-            if 'Campaña' in df_d.columns and 'Canal' in df_d.columns:
-                fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", color="Canal", height=300)
+            st.subheader("🟣 Campaña")
+            if not df_d.empty:
+                fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", height=300)
                 st.plotly_chart(fig_scat, use_container_width=True)
