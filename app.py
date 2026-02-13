@@ -55,7 +55,7 @@ def load_data():
         df_coords = pd.DataFrame(coords)
         return pd.merge(df, df_coords, on='Estado', how='left')
     except Exception as e:
-        st.error(f"Error al cargar datos: {e}")
+        st.error(f"Error al cargar Excel: {e}")
         return pd.DataFrame()
 
 df_master = load_data()
@@ -158,25 +158,28 @@ else:
         
         with g1:
             st.subheader("🗺️ Cobertura")
-            # Limpieza crítica para el mapa para evitar el error de Plotly
+            # LIMPIEZA PARA MAPA (Aquí estaba la regada)
             df_mapa = df_d.dropna(subset=['lat_i', 'lon_i', 'Disponible'])
             if not df_mapa.empty:
                 try:
                     fig_map = px.scatter_mapbox(df_mapa, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
                                                color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
                     st.plotly_chart(fig_map, use_container_width=True)
-                except: st.warning("Error en datos de coordenadas.")
-            else: st.write("Sin datos geográficos.")
+                except: st.warning("Datos de coordenadas no válidos.")
+            else: st.info("No hay coordenadas para graficar.")
             
         with g2:
             st.subheader("📊 Almacenes")
             if 'Nombre' in df_d.columns and not df_d.empty:
                 df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
-                fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', height=300)
-                st.plotly_chart(fig_bar, use_container_width=True)
+                if not df_rank.empty:
+                    fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', height=300)
+                    st.plotly_chart(fig_bar, use_container_width=True)
         
         with g3:
             st.subheader("🟣 Campaña")
             if not df_d.empty:
-                fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", height=300)
-                st.plotly_chart(fig_scat, use_container_width=True)
+                try:
+                    fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", height=300)
+                    st.plotly_chart(fig_scat, use_container_width=True)
+                except: st.info("Datos insuficientes para dispersión.")
