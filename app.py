@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -41,19 +44,89 @@ if not st.session_state.autenticado:
 SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
 URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
 
+# Cada almacén se ubica por la ciudad que trae en su nombre (columna 'Nombre').
+# clave (minúsculas, sin acentos) -> (Ciudad, Estado, latitud, longitud)
+# Si abren un almacén nuevo, solo agreguen una línea aquí.
+UBICACIONES = {
+    "acapulco":        ("Acapulco",         "Guerrero",          16.85,  -99.88),
+    "vallejo":         ("Ciudad de México", "Ciudad de México",  19.49,  -99.15),
+    "chihuahua":       ("Chihuahua",        "Chihuahua",         28.63, -106.07),
+    "cuernavaca":      ("Cuernavaca",       "Morelos",           18.92,  -99.23),
+    "culiacan":        ("Culiacán",         "Sinaloa",           24.80, -107.39),
+    "guadalajara":     ("Guadalajara",      "Jalisco",           20.67, -103.35),
+    "hermosillo":      ("Hermosillo",       "Sonora",            29.07, -110.96),
+    "leon":            ("León",             "Guanajuato",        21.12, -101.68),
+    "merida":          ("Mérida",           "Yucatán",           20.97,  -89.62),
+    "mexicali":        ("Mexicali",         "Baja California",   32.62, -115.45),
+    "monterrey":       ("Monterrey",        "Nuevo León",        25.69, -100.32),
+    "morelia":         ("Morelia",          "Michoacán",         19.70, -101.19),
+    "oaxaca":          ("Oaxaca",           "Oaxaca",            17.07,  -96.73),
+    "puebla":          ("Puebla",           "Puebla",            19.04,  -98.21),
+    "queretaro":       ("Querétaro",        "Querétaro",         20.59, -100.39),
+    "san luis potosi": ("San Luis Potosí",  "San Luis Potosí",   22.15, -100.98),
+    "tampico":         ("Tampico",          "Tamaulipas",        22.23,  -97.86),
+    "tijuana":         ("Tijuana",          "Baja California",   32.51, -117.04),
+    "toluca":          ("Toluca",           "Estado de México",  19.29,  -99.66),
+    "torreon":         ("Torreón",          "Coahuila",          25.54, -103.41),
+    "veracruz":        ("Veracruz",         "Veracruz",          19.17,  -96.13),
+    "villahermosa":    ("Villahermosa",     "Tabasco",           17.99,  -92.93),
+}
+_PATRONES = [(re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in UBICACIONES.items()]
+_SIN_UBICACION = (None, None, float("nan"), float("nan"))
+
+
+def _norm(valor):
+    """Texto comparable: sin acentos, minúsculas, sin espacios extra. Vacío -> ''."""
+    if pd.isna(valor):
+        return ""
+    texto = unicodedata.normalize("NFKD", str(valor)).encode("ascii", "ignore").decode("ascii")
+    return " ".join(texto.lower().split())
+
+
+def ubicar_almacen(nombre):
+    """'GUADALAJARA PVD' -> ('Guadalajara', 'Jalisco', 20.67, -103.35)"""
+    texto = _norm(nombre)
+    for patron, datos in _PATRONES:
+        if patron.search(texto):
+            return datos
+    return _SIN_UBICACION
+
+
 @st.cache_data(ttl=30)
 def load_data():
     try:
         df = pd.read_excel(URL)
         df.columns = df.columns.astype(str).str.strip()
-        
-        coords = {
-            'Estado': ['Aguascalientes', 'Baja California', 'Baja California Sur', 'Campeche', 'Chiapas', 'Chihuahua', 'Ciudad de México', 'Coahuila', 'Colima', 'Durango', 'Estado de México', 'Guanajuato', 'Guerrero', 'Hidalgo', 'Jalisco', 'Michoacán', 'Morelos', 'Nayarit', 'Nuevo León', 'Oaxaca', 'Puebla', 'Querétaro', 'Quintana Roo', 'San Luis Potosí', 'Sinaloa', 'Sonora', 'Tabasco', 'Tamaulipas', 'Tlaxcala', 'Veracruz', 'Yucatán', 'Zacatecas'],
-            'lat_i': [21.88, 30.84, 26.04, 19.83, 16.75, 28.63, 19.43, 27.05, 19.24, 24.02, 19.35, 21.01, 17.43, 20.09, 20.65, 19.70, 18.92, 21.50, 25.68, 17.07, 19.04, 20.58, 19.18, 22.15, 24.80, 29.07, 17.84, 23.73, 19.31, 19.17, 20.96, 22.77],
-            'lon_i': [-102.28, -115.28, -111.66, -90.53, -93.12, -106.06, -99.13, -101.70, -103.72, -104.65, -99.10, -101.25, -99.54, -98.76, -103.34, -101.18, -99.23, -104.89, -100.31, -96.72, -98.20, -100.38, -88.47, -100.98, -107.39, -110.96, -92.61, -99.14, -98.23, -96.13, -89.59, -102.58]
-        }
-        df_coords = pd.DataFrame(coords)
-        return pd.merge(df, df_coords, on='Estado', how='left')
+
+        for col in ["Disponible", "Apartados"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+        nombres = df["Nombre"] if "Nombre" in df.columns else pd.Series("", index=df.index)
+        ubic = pd.DataFrame(
+            [ubicar_almacen(n) for n in nombres],
+            columns=["_ciudad", "_estado", "lat_i", "lon_i"],
+            index=df.index,
+        )
+
+        # Lo que ya esté capturado en el Sheet se respeta; el almacén solo llena los vacíos.
+        for col, aux in [("Ciudad", "_ciudad"), ("Estado", "_estado")]:
+            if col in df.columns:
+                actual = df[col].astype("object")
+                vacio = actual.isna() | (actual.astype(str).str.strip() == "")
+                df[col] = actual.where(~vacio, ubic[aux])
+            else:
+                df[col] = ubic[aux]
+
+        # Coordenadas = ciudad del almacén (donde físicamente está el material)
+        df["lat_i"] = ubic["lat_i"].astype(float)
+        df["lon_i"] = ubic["lon_i"].astype(float)
+
+        sin_ubicar = sorted(nombres[df["lat_i"].isna()].dropna().astype(str).unique())
+        if sin_ubicar:
+            st.warning("Almacenes sin ubicación (agrégalos a UBICACIONES): " + ", ".join(sin_ubicar))
+
+        return df
     except Exception as e:
         st.error(f"Error al cargar Excel: {e}")
         return pd.DataFrame()
@@ -118,7 +191,7 @@ if menu == "📦 Gestión de Inventario":
         if sel_ca != "Todas": df_t = df_t[df_t['Campaña'].astype(str) == sel_ca]
         if sel_cn != "Todas": df_t = df_t[df_t['Canal'].astype(str) == sel_cn]
 
-        cols_t = ['código', 'Descripción', 'Disponible', 'Apartados', 'Nombre', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
+        cols_t = ['código', 'Descripción', 'Disponible', 'Apartados', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
         cols_validas = [c for c in cols_t if c in df_t.columns]
 
         st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
@@ -158,14 +231,32 @@ else:
         
         with g1:
             st.subheader("🗺️ Cobertura")
-            # LIMPIEZA PARA MAPA (Aquí estaba la regada)
-            df_mapa = df_d.dropna(subset=['lat_i', 'lon_i', 'Disponible'])
+            df_mapa = df_d.dropna(subset=['lat_i', 'lon_i'])
             if not df_mapa.empty:
+                # Una burbuja por ciudad (Monterrey DTS + Monterrey PVD se suman)
+                df_mapa = (
+                    df_mapa.groupby(['Ciudad', 'Estado', 'lat_i', 'lon_i'], as_index=False, dropna=False)
+                    .agg(Disponible=('Disponible', 'sum'),
+                         Almacenes=('Nombre', lambda s: ', '.join(sorted(s.astype(str).unique()))))
+                )
+                # El tamaño de la burbuja no acepta negativos (hay ajustes con Disponible < 0)
+                df_mapa['Tamaño'] = df_mapa['Disponible'].clip(lower=0)
+                if df_mapa['Tamaño'].max() == 0:
+                    df_mapa['Tamaño'] = 1
                 try:
-                    fig_map = px.scatter_mapbox(df_mapa, lat="lat_i", lon="lon_i", size="Disponible", color="Disponible",
-                                               color_continuous_scale="Viridis", zoom=3, mapbox_style="carto-positron", height=300)
+                    fig_map = px.scatter_mapbox(
+                        df_mapa, lat="lat_i", lon="lon_i", size="Tamaño", color="Disponible",
+                        hover_name="Ciudad",
+                        hover_data={"Estado": True, "Almacenes": True, "Disponible": True,
+                                    "Tamaño": False, "lat_i": False, "lon_i": False},
+                        color_continuous_scale=[AZUL_BARRA, MAGENTA], size_max=30,
+                        center={"lat": 23.6, "lon": -102.5}, zoom=3.3,
+                        mapbox_style="carto-positron", height=300,
+                    )
+                    fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
                     st.plotly_chart(fig_map, use_container_width=True)
-                except: st.warning("Datos de coordenadas no válidos.")
+                except Exception as e:
+                    st.warning(f"No se pudo dibujar el mapa: {e}")
             else: st.info("No hay coordenadas para graficar.")
             
         with g2:
@@ -178,8 +269,23 @@ else:
         
         with g3:
             st.subheader("🟣 Campaña")
-            if not df_d.empty:
-                try:
-                    fig_scat = px.scatter(df_d, x="Campaña", y="Canal", size="Disponible", height=300)
-                    st.plotly_chart(fig_scat, use_container_width=True)
-                except: st.info("Datos insuficientes para dispersión.")
+            if not df_d.empty and {'Campaña', 'Canal', 'Disponible'}.issubset(df_d.columns):
+                # Un punto por Campaña + Canal con su total (en vez de un punto por renglón)
+                df_camp = df_d.groupby(['Campaña', 'Canal'], as_index=False)['Disponible'].sum()
+                # El tamaño no acepta negativos: sin existencia = sin burbuja
+                df_camp['Tamaño'] = df_camp['Disponible'].clip(lower=0)
+                if df_camp.empty:
+                    st.info("Datos insuficientes para dispersión.")
+                else:
+                    if df_camp['Tamaño'].max() == 0:
+                        df_camp['Tamaño'] = 1
+                    try:
+                        fig_scat = px.scatter(
+                            df_camp, x="Campaña", y="Canal", size="Tamaño",
+                            hover_data={"Disponible": True, "Tamaño": False},
+                            color_discrete_sequence=[MAGENTA], size_max=30, height=300,
+                        )
+                        st.plotly_chart(fig_scat, use_container_width=True)
+                    except Exception as e:
+                        st.warning(f"No se pudo dibujar la gráfica: {e}")
+            else: st.info("Datos insuficientes para dispersión.")
