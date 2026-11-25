@@ -1,6 +1,9 @@
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
 
+import requests
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,7 +12,7 @@ import plotly.graph_objects as go
 # 1. CONFIGURACIÓN Y ESTILO
 st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA - Dashboard")
 
-AZUL_BARRA = "#002d5a" 
+AZUL_BARRA = "#002d5a"
 MAGENTA = "#b5006a"
 
 st.markdown(f"""
@@ -40,9 +43,12 @@ if not st.session_state.autenticado:
             st.error("Clave incorrecta")
     st.stop()
 
-# 3. CARGA DE DATOS
-SHEET_ID = "1lHr6sup1Ft59WKqh8gZkC4bXnehw5rM6O-aEr6WmUyc"
-URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=xlsx"
+# 3. CARGA DE DATOS (directo de Logify → "Nuevo Reportes", se refresca cada hora)
+LOGIFY_URL = "https://cliente.logify.com.mx"
+LOGIFY_CLIENTE = "MRS"
+LOGIFY_PROYECTO = "0001"                  # 0001-Exhibidores
+ACTUALIZAR_CADA = 60 * 60                 # segundos (1 hora)
+HORA_MX = timezone(timedelta(hours=-6))   # Centro de México (sin horario de verano)
 
 # Cada almacén se ubica por la ciudad que trae en su nombre (columna 'Nombre').
 # clave (minúsculas, sin acentos) -> (Ciudad, Estado, latitud, longitud)
@@ -92,46 +98,144 @@ def ubicar_almacen(nombre):
     return _SIN_UBICACION
 
 
-@st.cache_data(ttl=30)
-def load_data():
+def _credenciales_logify():
+    """Usuario y contraseña de Logify desde los secrets de Streamlit (nunca en el código)."""
     try:
-        df = pd.read_excel(URL)
-        df.columns = df.columns.astype(str).str.strip()
+        return st.secrets["logify"]["usuario"], st.secrets["logify"]["contrasena"]
+    except Exception:
+        raise RuntimeError(
+            "faltan las credenciales. Agrega en los secrets de Streamlit: "
+            '[logify] usuario = "..." y contrasena = "..."'
+        ) from None
 
-        for col in ["Disponible", "Apartados"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-        nombres = df["Nombre"] if "Nombre" in df.columns else pd.Series("", index=df.index)
-        ubic = pd.DataFrame(
-            [ubicar_almacen(n) for n in nombres],
-            columns=["_ciudad", "_estado", "lat_i", "lon_i"],
-            index=df.index,
+def _pedir_reporte(sesion, reporte):
+    """El mismo dato que 'Nuevo Reportes → Descargar Excel', pero en JSON."""
+    r = sesion.get(
+        f"{LOGIFY_URL}/WMS/{LOGIFY_PROYECTO}/Get/{reporte}",
+        headers={"Accept": "application/json"},
+        timeout=60,
+    )
+    r.raise_for_status()
+    if "json" not in r.headers.get("Content-Type", ""):
+        # Si no se abrió la sesión, Logify regresa su página de inicio de sesión
+        raise RuntimeError("Logify no entregó datos; revisa el usuario y la contraseña en los secrets.")
+    datos = r.json()
+    return datos if isinstance(datos, list) else datos.get("data", [])
+
+
+def _pedir_catalogo(sesion):
+    """Catálogo de productos (de aquí salen las fotos). Si falla, la app sigue sin fotos."""
+    try:
+        r = sesion.get(f"{LOGIFY_URL}/WMS/Catalogo/Get", timeout=60)
+        r.raise_for_status()
+        datos = r.json()  # Logify lo manda marcado como HTML, pero es JSON
+        return datos if isinstance(datos, list) else datos.get("data", [])
+    except Exception:
+        return []
+
+
+def descargar_logify(usuario, contrasena):
+    """Inicia sesión como en la página y trae los reportes de inventario y el catálogo."""
+    with requests.Session() as s:
+        r = s.post(f"{LOGIFY_URL}/login",
+                   data={"usuario": usuario, "contrasena": contrasena}, timeout=30)
+        r.raise_for_status()
+        # La cuenta tiene varios proyectos: fija 0001-Exhibidores
+        s.post(f"{LOGIFY_URL}/changebranch",
+               data={"url_local": f"/WMS/{LOGIFY_PROYECTO}/Reporting",
+                     "client_code_main": LOGIFY_CLIENTE,
+                     "branch_number_main": LOGIFY_PROYECTO},
+               timeout=30)
+        return (_pedir_reporte(s, "stock-almacen"),
+                _pedir_reporte(s, "stock-lote"),
+                _pedir_catalogo(s))
+
+
+# Nombres de Logify -> nombres que usa el resto de la app
+COLUMNAS_LOGIFY = {
+    "codigo": "código", "descripcion": "Descripción", "disponible": "Disponible",
+    "apartado": "Apartados", "total": "Total", "almacen": "Nombre", "canal": "Canal",
+    "arte": "Clasificación", "campaign": "Campaña",
+}
+
+
+def _url_foto(producto):
+    """Liga pública de la imagen del producto: la 'ficha' y, si no hay, la 'foto'."""
+    for campo in ("ficha_prod", "foto_prod"):
+        archivo = str(producto.get(campo) or "").strip()
+        if archivo:
+            return f"{LOGIFY_URL}/assets/inventario/{quote(archivo)}"
+    return None
+
+
+def armar_inventario(stock_almacen, stock_lote, catalogo=None):
+    """Une 'Stock por almacén' con 'Stock por lote', la foto del catálogo y la ubicación del almacén."""
+    llave = ["almacen", "codigo", "canal"]
+    df = pd.DataFrame(stock_almacen)
+    if df.empty:
+        raise RuntimeError("Logify regresó el reporte de stock vacío.")
+    faltan = [c for c in llave if c not in df.columns]
+    if faltan:
+        raise RuntimeError(f"el reporte de Logify cambió de formato (faltan: {', '.join(faltan)}).")
+    df[llave] = df[llave].astype(str)
+
+    # Estado del material y AÑO (fecha de ingreso) vienen del reporte por lote.
+    # Si un producto tiene varios lotes en el mismo almacén, manda el lote con más piezas.
+    lot = pd.DataFrame(stock_lote)
+    if set(llave + ["stock", "fecha_ingreso", "estado"]).issubset(lot.columns):
+        lot[llave] = lot[llave].astype(str)
+        lot["stock"] = pd.to_numeric(lot["stock"], errors="coerce").fillna(0)
+        lot["AÑO"] = pd.to_datetime(lot["fecha_ingreso"], errors="coerce").dt.year.astype("Int64")
+        principal = (
+            lot.sort_values("stock", ascending=False)
+            .drop_duplicates(llave)
+            .rename(columns={"estado": "Estado de material"})
+            [llave + ["Estado de material", "AÑO"]]
         )
+        df = df.merge(principal, on=llave, how="left")
 
-        # Lo que ya esté capturado en el Sheet se respeta; el almacén solo llena los vacíos.
-        for col, aux in [("Ciudad", "_ciudad"), ("Estado", "_estado")]:
-            if col in df.columns:
-                actual = df[col].astype("object")
-                vacio = actual.isna() | (actual.astype(str).str.strip() == "")
-                df[col] = actual.where(~vacio, ubic[aux])
-            else:
-                df[col] = ubic[aux]
+    df = df.rename(columns=COLUMNAS_LOGIFY)
+    for col in ["Disponible", "Apartados", "Total"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-        # Coordenadas = ciudad del almacén (donde físicamente está el material)
-        df["lat_i"] = ubic["lat_i"].astype(float)
-        df["lon_i"] = ubic["lon_i"].astype(float)
+    # Foto: liga a la imagen que el producto tiene en 'Catálogo de productos'
+    fotos = {}
+    for producto in catalogo or []:
+        sku, url = str(producto.get("sku_prod") or "").strip(), _url_foto(producto)
+        if sku and url and sku not in fotos:
+            fotos[sku] = url
+    df["Foto"] = df["código"].map(fotos)
 
-        sin_ubicar = sorted(nombres[df["lat_i"].isna()].dropna().astype(str).unique())
-        if sin_ubicar:
-            st.warning("Almacenes sin ubicación (agrégalos a UBICACIONES): " + ", ".join(sin_ubicar))
+    # Ciudad, Estado y coordenadas = ciudad del almacén (donde físicamente está el material)
+    ubic = pd.DataFrame(
+        [ubicar_almacen(n) for n in df["Nombre"]],
+        columns=["Ciudad", "Estado", "lat_i", "lon_i"],
+        index=df.index,
+    )
+    ubic[["lat_i", "lon_i"]] = ubic[["lat_i", "lon_i"]].astype(float)
+    return df.join(ubic)
 
-        return df
-    except Exception as e:
-        st.error(f"Error al cargar Excel: {e}")
-        return pd.DataFrame()
 
-df_master = load_data()
+@st.cache_data(ttl=ACTUALIZAR_CADA, show_spinner="Descargando inventario de Logify…")
+def load_data():
+    # Si algo falla, el error NO se guarda en caché: la siguiente visita vuelve a intentar
+    usuario, contrasena = _credenciales_logify()
+    stock_almacen, stock_lote, catalogo = descargar_logify(usuario, contrasena)
+    return armar_inventario(stock_almacen, stock_lote, catalogo), datetime.now(HORA_MX)
+
+
+try:
+    df_master, actualizado = load_data()
+except Exception as e:
+    st.error(f"No se pudo cargar el inventario de Logify: {e}")
+    df_master, actualizado = pd.DataFrame(), None
+
+if not df_master.empty:
+    sin_ubicar = sorted(df_master.loc[df_master["lat_i"].isna(), "Nombre"].dropna().astype(str).unique())
+    if sin_ubicar:
+        st.warning("Almacenes sin ubicación en el mapa (agrégalos a UBICACIONES): " + ", ".join(sin_ubicar))
 
 # 4. FUNCIÓN LIQUID FILL
 def draw_liquid_fill(percent):
@@ -159,6 +263,11 @@ def get_options(df, column_name, first_option="Todas"):
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
     menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
+    if actualizado is not None:
+        st.caption(f"Inventario Logify · actualizado {actualizado:%d/%m/%Y %H:%M}")
+    if st.button("🔄 Actualizar ahora"):
+        load_data.clear()
+        st.rerun()
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
@@ -166,35 +275,42 @@ with st.sidebar:
 # 7. VISTA: GESTIÓN DE INVENTARIO
 if menu == "📦 Gestión de Inventario":
     st.title("📦 Gestión de Inventario")
-    
+
     if not df_master.empty:
         r1c1, r1c2 = st.columns([1, 2])
-        with r1c1: 
+        with r1c1:
             sel_alm = st.selectbox("Almacén", get_options(df_master, 'Nombre'))
-        with r1c2: 
+        with r1c2:
             search_t = st.text_input("Buscador Descripción / SKU", placeholder="Escribe para buscar...")
 
         r2c1, r2c2, r2c3 = st.columns(3)
-        with r2c1: 
+        with r2c1:
             sel_cl = st.selectbox("Clasificación", get_options(df_master, 'Clasificación'))
-        with r2c2: 
+        with r2c2:
             sel_ca = st.selectbox("Campaña", get_options(df_master, 'Campaña'))
-        with r2c3: 
+        with r2c3:
             sel_cn = st.selectbox("Canal", get_options(df_master, 'Canal'))
 
         df_t = df_master.copy()
         if sel_alm != "Todas": df_t = df_t[df_t['Nombre'].astype(str) == sel_alm]
-        if search_t: 
-            df_t = df_t[df_t['Descripción'].astype(str).str.contains(search_t, case=False, na=False) | 
+        if search_t:
+            df_t = df_t[df_t['Descripción'].astype(str).str.contains(search_t, case=False, na=False) |
                         df_t['código'].astype(str).str.contains(search_t, case=False, na=False)]
         if sel_cl != "Todas": df_t = df_t[df_t['Clasificación'].astype(str) == sel_cl]
         if sel_ca != "Todas": df_t = df_t[df_t['Campaña'].astype(str) == sel_ca]
         if sel_cn != "Todas": df_t = df_t[df_t['Canal'].astype(str) == sel_cn]
 
-        cols_t = ['código', 'Descripción', 'Disponible', 'Apartados', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
+        cols_t = ['código', 'Descripción', 'Foto', 'Disponible', 'Apartados', 'Total', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
         cols_validas = [c for c in cols_t if c in df_t.columns]
 
-        st.dataframe(df_t[cols_validas], use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_t[cols_validas], use_container_width=True, hide_index=True,
+            column_config={
+                # 📷 abre la imagen del producto en otra pestaña; vacío = sin foto en Logify
+                "Foto": st.column_config.LinkColumn("Foto", display_text="📷", width="small",
+                                                    help="Abre la imagen del producto"),
+            },
+        )
         st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 8. VISTA: NUEVAS CAMPAÑAS
@@ -205,12 +321,12 @@ elif menu == "✨ Nuevas Campañas":
 # 9. VISTA: ANÁLISIS 360
 else:
     st.title("📊 Análisis 360 - Dashboard")
-    
+
     if not df_master.empty:
         c1, c2 = st.columns(2)
         with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal', "Todos"))
         with c2: camp_d = st.selectbox("Campaña Dashboard", get_options(df_master, 'Campaña'))
-        
+
         df_d = df_master.copy()
         if canal_d not in ["Todos", "Todas"]: df_d = df_d[df_d['Canal'].astype(str) == canal_d]
         if camp_d != "Todas": df_d = df_d[df_d['Campaña'].astype(str) == camp_d]
@@ -222,13 +338,13 @@ else:
             total_f = df_d['Disponible'].sum() if 'Disponible' in df_d.columns else 0
             porc = (total_f / total_g * 100) if total_g > 0 else 0
             st.components.v1.html(draw_liquid_fill(porc), height=280)
-        
+
         with col_dash2:
             st.markdown(f"""<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0; font-size:20px;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>""", unsafe_allow_html=True)
 
         st.markdown("---")
         g1, g2, g3 = st.columns(3)
-        
+
         with g1:
             st.subheader("🗺️ Cobertura")
             df_mapa = df_d.dropna(subset=['lat_i', 'lon_i'])
@@ -258,7 +374,7 @@ else:
                 except Exception as e:
                     st.warning(f"No se pudo dibujar el mapa: {e}")
             else: st.info("No hay coordenadas para graficar.")
-            
+
         with g2:
             st.subheader("📊 Almacenes")
             if 'Nombre' in df_d.columns and not df_d.empty:
@@ -266,7 +382,7 @@ else:
                 if not df_rank.empty:
                     fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', height=300)
                     st.plotly_chart(fig_bar, use_container_width=True)
-        
+
         with g3:
             st.subheader("🟣 Campaña")
             if not df_d.empty and {'Campaña', 'Canal', 'Disponible'}.issubset(df_d.columns):
