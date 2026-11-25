@@ -47,7 +47,10 @@ if not st.session_state.autenticado:
 LOGIFY_URL = "https://cliente.logify.com.mx"
 LOGIFY_CLIENTE = "MRS"
 LOGIFY_PROYECTO = "0001"                  # 0001-Exhibidores
-ACTUALIZAR_CADA = 60 * 60                 # segundos (1 hora)
+ACTUALIZAR_CADA = 60 * 60                 # inventario: cada hora (segundos)
+CATALOGO_CADA = 24 * 60 * 60              # catálogo (fotos): una vez al día
+ESPERA_BOTON = 10 * 60                    # mínimo entre clics de "Actualizar ahora"
+REINTENTO_ERROR = 5 * 60                  # si Logify falla, esperar antes de reintentar
 HORA_MX = timezone(timedelta(hours=-6))   # Centro de México (sin horario de verano)
 
 # Cada almacén se ubica por la ciudad que trae en su nombre (columna 'Nombre').
@@ -135,8 +138,8 @@ def _pedir_catalogo(sesion):
         return []
 
 
-def descargar_logify(usuario, contrasena):
-    """Inicia sesión como en la página y trae los reportes de inventario y el catálogo."""
+def descargar_logify(usuario, contrasena, con_catalogo=True):
+    """Inicia sesión como en la página y trae los reportes de inventario (y el catálogo si se pide)."""
     with requests.Session() as s:
         r = s.post(f"{LOGIFY_URL}/login",
                    data={"usuario": usuario, "contrasena": contrasena}, timeout=30)
@@ -149,7 +152,7 @@ def descargar_logify(usuario, contrasena):
                timeout=30)
         return (_pedir_reporte(s, "stock-almacen"),
                 _pedir_reporte(s, "stock-lote"),
-                _pedir_catalogo(s))
+                _pedir_catalogo(s) if con_catalogo else [])
 
 
 # Nombres de Logify -> nombres que usa el resto de la app
@@ -218,16 +221,45 @@ def armar_inventario(stock_almacen, stock_lote, catalogo=None):
     return df.join(ubic)
 
 
+@st.cache_resource
+def _memoria_logify():
+    """Memoria compartida por todos los usuarios de la app (se borra si la app se reinicia)."""
+    return {"catalogo": [], "catalogo_fecha": None, "error": None, "error_fecha": None}
+
+
 @st.cache_data(ttl=ACTUALIZAR_CADA, show_spinner="Descargando inventario de Logify…")
 def load_data():
-    # Si algo falla, el error NO se guarda en caché: la siguiente visita vuelve a intentar
+    # Si algo falla, el error NO se guarda en caché (ver _cargar_con_freno)
+    mem = _memoria_logify()
+    ahora = datetime.now(HORA_MX)
+    # El catálogo (fotos) casi no cambia: se pide en la misma sesión, pero solo 1 vez al día
+    pedir_catalogo = (mem["catalogo_fecha"] is None
+                      or ahora - mem["catalogo_fecha"] > timedelta(seconds=CATALOGO_CADA))
     usuario, contrasena = _credenciales_logify()
-    stock_almacen, stock_lote, catalogo = descargar_logify(usuario, contrasena)
-    return armar_inventario(stock_almacen, stock_lote, catalogo), datetime.now(HORA_MX)
+    stock_almacen, stock_lote, catalogo = descargar_logify(usuario, contrasena, pedir_catalogo)
+    if catalogo:  # solo se reemplaza si llegó bien; si falló, se reintenta en la siguiente carga
+        mem["catalogo"], mem["catalogo_fecha"] = catalogo, ahora
+    return armar_inventario(stock_almacen, stock_lote, mem["catalogo"]), ahora
+
+
+def _cargar_con_freno():
+    """Si Logify está fallando, no vuelve a iniciar sesión en cada clic: espera REINTENTO_ERROR."""
+    mem = _memoria_logify()
+    ahora = datetime.now(HORA_MX)
+    if mem["error_fecha"] and ahora - mem["error_fecha"] < timedelta(seconds=REINTENTO_ERROR):
+        reintento = mem["error_fecha"] + timedelta(seconds=REINTENTO_ERROR)
+        raise RuntimeError(f"{mem['error']} (siguiente intento a las {reintento:%H:%M})")
+    try:
+        resultado = load_data()
+    except Exception as e:
+        mem["error"], mem["error_fecha"] = str(e), ahora
+        raise
+    mem["error"] = mem["error_fecha"] = None
+    return resultado
 
 
 try:
-    df_master, actualizado = load_data()
+    df_master, actualizado = _cargar_con_freno()
 except Exception as e:
     st.error(f"No se pudo cargar el inventario de Logify: {e}")
     df_master, actualizado = pd.DataFrame(), None
@@ -259,6 +291,30 @@ def get_options(df, column_name, first_option="Todas"):
         return [first_option] + vals
     return [first_option]
 
+# 5b. FOTO EN GRANDE (ventana encima de la app, sin abrir otra pestaña)
+@st.dialog("Foto del producto", width="large")
+def ver_foto(fila):
+    st.image(fila["Foto"])
+    st.markdown(f"**{fila['código']}** · {fila['Descripción']}")
+    st.caption(f"{fila['Nombre']} · {fila['Canal']} · Disponible: {fila['Disponible']:,.0f}")
+    st.link_button("Abrir imagen original", fila["Foto"])
+
+
+def abrir_foto_seleccionada(df_vista, filas):
+    """Abre la foto del renglón marcado una sola vez (no en cada recarga de la página)."""
+    if not filas or filas[0] >= len(df_vista):
+        st.session_state.foto_mostrada = None
+        return
+    fila = df_vista.iloc[filas[0]]
+    clave = f"{fila['código']}|{fila['Nombre']}|{fila['Canal']}"
+    if st.session_state.get("foto_mostrada") == clave:
+        return
+    st.session_state.foto_mostrada = clave
+    if pd.notna(fila.get("Foto")):
+        ver_foto(fila)
+    else:
+        st.toast("Este producto no tiene foto en Logify.")
+
 # 6. MENÚ LATERAL
 with st.sidebar:
     st.header("PVD LOGÍSTICA")
@@ -266,8 +322,14 @@ with st.sidebar:
     if actualizado is not None:
         st.caption(f"Inventario Logify · actualizado {actualizado:%d/%m/%Y %H:%M}")
     if st.button("🔄 Actualizar ahora"):
-        load_data.clear()
-        st.rerun()
+        # Freno: entre actualizaciones deben pasar al menos ESPERA_BOTON (cuenta para todos los usuarios)
+        siguiente = actualizado + timedelta(seconds=ESPERA_BOTON) if actualizado else None
+        if siguiente and datetime.now(HORA_MX) < siguiente:
+            st.toast(f"Los datos son de las {actualizado:%H:%M}. "
+                     f"Puedes volver a actualizar a las {siguiente:%H:%M}.")
+        else:
+            load_data.clear()
+            st.rerun()
     if st.button("Cerrar Sesión"):
         st.session_state.autenticado = False
         st.rerun()
@@ -303,14 +365,23 @@ if menu == "📦 Gestión de Inventario":
         cols_t = ['código', 'Descripción', 'Foto', 'Disponible', 'Apartados', 'Total', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
         cols_validas = [c for c in cols_t if c in df_t.columns]
 
-        st.dataframe(
-            df_t[cols_validas], use_container_width=True, hide_index=True,
+        # En pantalla, 📷 solo indica que hay foto; la liga (columna Foto) queda oculta.
+        # El CSV de abajo sí incluye la liga.
+        df_vista = df_t[cols_validas].reset_index(drop=True)
+        df_vista.insert(df_vista.columns.get_loc('Foto'), '📷',
+                        df_vista['Foto'].notna().map({True: '📷', False: ''}))
+
+        st.caption("📷 Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
+        evento = st.dataframe(
+            df_vista, use_container_width=True, hide_index=True,
+            on_select="rerun", selection_mode="single-row", key="tabla_inventario",
             column_config={
-                # 📷 abre la imagen del producto en otra pestaña; vacío = sin foto en Logify
-                "Foto": st.column_config.LinkColumn("Foto", display_text="📷", width="small",
-                                                    help="Abre la imagen del producto"),
+                "Foto": None,
+                "📷": st.column_config.TextColumn("📷", width="small",
+                                                  help="Marca la casilla del renglón para ver la foto"),
             },
         )
+        abrir_foto_seleccionada(df_vista, evento.selection.rows)
         st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 8. VISTA: NUEVAS CAMPAÑAS
