@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import requests
+from packaging.version import Version
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -292,6 +293,10 @@ def get_options(df, column_name, first_option="Todas"):
     return [first_option]
 
 # 5b. FOTO EN GRANDE (ventana encima de la app, sin abrir otra pestaña)
+# Desde Streamlit 1.49 se puede dar clic directo a una celda; antes solo a la casilla del renglón.
+CLIC_EN_CELDA = Version(st.__version__) >= Version("1.49.0")
+
+
 @st.dialog("Foto del producto", width="large")
 def ver_foto(fila):
     st.image(fila["Foto"])
@@ -300,16 +305,28 @@ def ver_foto(fila):
     st.link_button("Abrir imagen original", fila["Foto"])
 
 
-def abrir_foto_seleccionada(df_vista, filas):
-    """Abre la foto del renglón marcado una sola vez (no en cada recarga de la página)."""
-    if not filas or filas[0] >= len(df_vista):
-        st.session_state.foto_mostrada = None
+def _al_seleccionar_foto():
+    """Se ejecuta al dar clic en la tabla: anota qué foto abrir y limpia la selección,
+    para que el mismo 📷 se pueda volver a abrir después de cerrar la ventana."""
+    seleccion = st.session_state.get("tabla_inventario", {}).get("selection", {})
+    celdas = [fila for fila, columna in seleccion.get("cells", []) if columna == "📷"]
+    filas = list(seleccion.get("rows", []))
+    destino = celdas[0] if celdas else (filas[0] if filas else None)
+    if destino is None:
+        return  # clic en otra columna: no abre nada
+    st.session_state.foto_pendiente = destino
+    try:
+        st.session_state.tabla_inventario = {"selection": {"rows": [], "columns": [], "cells": []}}
+    except Exception:
+        pass  # versiones viejas no permiten limpiar la selección; solo no se re-abre con el mismo clic
+
+
+def abrir_foto_pendiente(df_vista):
+    """Abre la ventana una sola vez por clic (no en cada recarga de la página)."""
+    destino = st.session_state.pop("foto_pendiente", None)
+    if destino is None or destino >= len(df_vista):
         return
-    fila = df_vista.iloc[filas[0]]
-    clave = f"{fila['código']}|{fila['Nombre']}|{fila['Canal']}"
-    if st.session_state.get("foto_mostrada") == clave:
-        return
-    st.session_state.foto_mostrada = clave
+    fila = df_vista.iloc[destino]
     if pd.notna(fila.get("Foto")):
         ver_foto(fila)
     else:
@@ -371,17 +388,21 @@ if menu == "📦 Gestión de Inventario":
         df_vista.insert(df_vista.columns.get_loc('Foto'), '📷',
                         df_vista['Foto'].notna().map({True: '📷', False: ''}))
 
-        st.caption("📷 Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
-        evento = st.dataframe(
+        if CLIC_EN_CELDA:
+            st.caption("📷 Da clic en la camarita de un producto para ver su foto en grande.")
+        else:
+            st.caption("📷 Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
+        st.dataframe(
             df_vista, use_container_width=True, hide_index=True,
-            on_select="rerun", selection_mode="single-row", key="tabla_inventario",
+            on_select=_al_seleccionar_foto, key="tabla_inventario",
+            selection_mode=["single-row", "single-cell"] if CLIC_EN_CELDA else "single-row",
             column_config={
                 "Foto": None,
                 "📷": st.column_config.TextColumn("📷", width="small",
-                                                  help="Marca la casilla del renglón para ver la foto"),
+                                                  help="Da clic para ver la foto en grande"),
             },
         )
-        abrir_foto_seleccionada(df_vista, evento.selection.rows)
+        abrir_foto_pendiente(df_vista)
         st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 8. VISTA: NUEVAS CAMPAÑAS
