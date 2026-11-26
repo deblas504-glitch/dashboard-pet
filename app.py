@@ -1,3 +1,4 @@
+import base64
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -570,6 +571,16 @@ def get_options(df, column_name, first_option="Todas"):
 # Desde Streamlit 1.49 se puede dar clic directo a una celda; antes solo a la casilla del renglón.
 CLIC_EN_CELDA = Version(st.__version__) >= Version("1.49.0")
 
+# Camarita estilo PVD (cuerpo cian, contorno grueso en tinta, lente magenta) como imagen SVG
+_SVG_CAMARITA = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 24">'
+    '<rect x="11" y="2" width="10" height="5" fill="#0B1530"/>'
+    '<rect x="2.5" y="5.5" width="27" height="16" fill="#27B4EA" stroke="#0B1530" stroke-width="3"/>'
+    '<circle cx="16" cy="13.5" r="5" fill="#B5006A" stroke="#0B1530" stroke-width="3"/>'
+    '<rect x="23" y="8.5" width="3" height="2.5" fill="#0B1530"/></svg>'
+)
+CAMARITA = "data:image/svg+xml;base64," + base64.b64encode(_SVG_CAMARITA.encode()).decode()
+
 
 @st.dialog("Foto del producto", width="large")
 def ver_foto(fila):
@@ -671,7 +682,7 @@ if menu == SECCIONES[0]:
         # (url_foto). El CSV de abajo sí incluye la liga.
         df_vista = df_t[cols_validas].reset_index(drop=True).rename(columns={'Foto': 'url_foto'})
         df_vista.insert(df_vista.columns.get_loc('url_foto'), 'Foto',
-                        df_vista['url_foto'].notna().map({True: '◉ VER', False: ''}))
+                        df_vista['url_foto'].notna().map({True: CAMARITA, False: None}))
         # Textos vacíos de Logify: una raya en lugar de "None"
         for col in ['Descripción', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación',
                     'Campaña', 'Estado de material']:
@@ -682,7 +693,6 @@ if menu == SECCIONES[0]:
         # miles con coma. Si el servidor no tiene el motor de estilos, se muestra la tabla normal.
         try:
             tabla = (df_vista.style
-                     .map(lambda v: f'color: {AZUL}; font-weight: 700' if v else '', subset=['Foto'])
                      .map(lambda v: f'color: {MAGENTA}; font-weight: 700' if pd.notna(v) and v <= 0 else '',
                           subset=['Disponible'])
                      .format('{:,.0f}', subset=[c for c in ['Disponible', 'Apartados', 'Total']
@@ -692,17 +702,17 @@ if menu == SECCIONES[0]:
             tabla = df_vista
 
         if CLIC_EN_CELDA:
-            st.caption("◉ Da clic en VER para ver la foto del producto en grande.")
+            st.caption("Da clic en la camarita de un producto para ver su foto en grande.")
         else:
-            st.caption("◉ Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
+            st.caption("Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
         st.dataframe(
             tabla, use_container_width=True, hide_index=True,
             on_select=_al_seleccionar_foto, key="tabla_inventario",
             selection_mode=["single-row", "single-cell"] if CLIC_EN_CELDA else "single-row",
             column_config={
                 "url_foto": None,
-                "Foto": st.column_config.TextColumn("Foto", width="small",
-                                                    help="Da clic en VER para ver la foto en grande"),
+                "Foto": st.column_config.ImageColumn("Foto", width="small",
+                                                     help="Da clic en la camarita para ver la foto en grande"),
             },
         )
         abrir_foto_pendiente(df_vista)
