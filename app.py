@@ -10,38 +10,121 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# 1. CONFIGURACIÓN Y ESTILO
-st.set_page_config(layout="wide", page_title="PVD LOGÍSTICA - Dashboard")
+# 1. CONFIGURACIÓN Y ESTILO (neo brutalista PVD: bordes gruesos, sombras sólidas, Jost)
+st.set_page_config(layout="wide", page_title="PVD · Reporte de inventario")
 
-AZUL_BARRA = "#002d5a"
+TINTA = "#0B1530"       # bordes, sombras y texto
+AZUL_BARRA = "#002d5a"  # azul marino PVD
+AZUL = "#1F6FC4"
+CIAN = "#27B4EA"
 MAGENTA = "#b5006a"
 
-st.markdown(f"""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700&display=swap');
-    html, body, [class*="st-"] {{
-        font-family: "Franklin Gothic Demi Cond", "Franklin Gothic Medium Cond", "Arial Narrow", sans-serif;
-    }}
-    [data-testid="stSidebar"] {{ background-color: {AZUL_BARRA}; }}
-    [data-testid="stSidebar"] * {{ color: white !important; font-family: "Franklin Gothic Demi Cond", sans-serif; }}
-    h1, h2, h3 {{ font-family: "Franklin Gothic Demi Cond", sans-serif !important; font-weight: bold; }}
-    div[data-testid="stDataFrame"] > div {{ overflow-x: auto; }}
-    </style>
-    """, unsafe_allow_html=True)
+ESTILO_PVD = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800;900&display=swap');
+.stApp{background:#EEF3F9;color:#0B1530}
+.stApp,.stApp p,.stApp span,.stApp div,.stApp label,.stApp input,.stApp textarea,.stApp button,.stApp li{font-family:'Jost',system-ui,sans-serif}
+.stApp [data-testid="stIconMaterial"],.stApp [class*="material-symbols"]{font-family:'Material Symbols Rounded' !important}
+[data-testid="stHeader"]{background:transparent}
+[data-testid="stDecoration"]{display:none}
+.block-container,[data-testid="stMainBlockContainer"]{padding-top:2rem}
+.stApp [data-testid="stMarkdownContainer"] p{color:#0B1530}
+[data-testid="InputInstructions"]{display:none}
+[data-testid="stWidgetLabel"] p{font-size:13px !important;font-weight:800 !important;letter-spacing:.1em;text-transform:uppercase;color:#0B1530}
+.stTextInput [data-baseweb="input"],.stSelectbox [data-baseweb="select"]>div{border:3px solid #0B1530 !important;border-radius:0 !important;background:#FFFFFF !important;box-shadow:4px 4px 0 #0B1530}
+.stTextInput [data-baseweb="base-input"],.stTextInput input{background:#FFFFFF !important;color:#0B1530 !important;font-weight:500}
+.stButton>button,.stDownloadButton>button,.stFormSubmitButton>button,.stLinkButton>a{background:#27B4EA !important;color:#0B1530 !important;border:3px solid #0B1530 !important;border-radius:0 !important;box-shadow:4px 4px 0 #0B1530;font-weight:800 !important;letter-spacing:.08em;text-transform:uppercase;transition:transform .08s ease,box-shadow .08s ease}
+.stButton>button p,.stDownloadButton>button p,.stFormSubmitButton>button p,.stLinkButton>a p{font-weight:800 !important;color:#0B1530 !important}
+.stButton>button:hover,.stDownloadButton>button:hover,.stFormSubmitButton>button:hover,.stLinkButton>a:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 #0B1530}
+.stButton>button:focus-visible,.stDownloadButton>button:focus-visible,.stFormSubmitButton>button:focus-visible,.stLinkButton>a:focus-visible{outline:3px solid #B5006A;outline-offset:3px}
+[data-testid="stDataFrame"]{border:3px solid #0B1530;box-shadow:6px 6px 0 #0B1530;background:#FFFFFF}
+[data-testid="stAlertContainer"]{border:3px solid #0B1530;border-radius:0;box-shadow:4px 4px 0 #0B1530}
+[class*="st-key-tarjeta"]{background:#FFFFFF;border:3px solid #0B1530;box-shadow:6px 6px 0 #0B1530;padding:16px}
+[data-testid="stDialog"] [role="dialog"]{border:3px solid #0B1530;border-radius:0;box-shadow:8px 8px 0 #0B1530}
+[data-testid="stSidebar"]{background:#002D5A;border-right:3px solid #0B1530}
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,[data-testid="stSidebar"] [data-testid="stCaptionContainer"],[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p{color:#FFFFFF !important}
+[data-testid="stSidebar"] [role="radiogroup"]{gap:10px}
+[data-testid="stSidebar"] [role="radiogroup"] label{background:#FFFFFF;border:3px solid #0B1530;box-shadow:4px 4px 0 #27B4EA;padding:10px 12px;margin:0;width:100%;box-sizing:border-box}
+[data-testid="stSidebar"] [role="radiogroup"] label p{color:#0B1530 !important;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){background:#27B4EA;box-shadow:4px 4px 0 #FFFFFF}
+[data-testid="stSidebar"] .st-key-btn_salir button{background:#FFFFFF !important}
+.pvd-logo{display:inline-flex;align-items:center;gap:8px;background:#FFFFFF;border:3px solid #0B1530;box-shadow:4px 4px 0 #0B1530;padding:6px 14px 6px 10px}
+.pvd-logo-texto{display:flex;flex-direction:column;line-height:1}
+.pvd-logo-texto b{font-size:24px;font-weight:900;color:#0B1530}
+.pvd-logo-texto small{font-size:8px;font-weight:700;letter-spacing:.26em;color:#0B1530}
+.pvd-logo--oscuro{background:transparent;border:0;box-shadow:none;padding:0 0 8px}
+.pvd-logo--oscuro .pvd-logo-texto b,.pvd-logo--oscuro .pvd-logo-texto small{color:#FFFFFF}
+.pvd-encabezado{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;margin-bottom:6px}
+.pvd-seccion{flex:1 1 260px;background:#002D5A;border:3px solid #0B1530;box-shadow:6px 6px 0 #0B1530;padding:10px 16px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.pvd-seccion small{font-size:11px;font-weight:800;letter-spacing:.16em;color:#27B4EA}
+.pvd-seccion span{font-size:34px;font-weight:900;line-height:1;text-transform:uppercase;color:#FFFFFF}
+.pvd-hora{background:#B5006A;border:3px solid #0B1530;box-shadow:6px 6px 0 #0B1530;padding:8px 14px;display:flex;flex-direction:column;justify-content:center}
+.pvd-hora small{font-size:10px;font-weight:800;letter-spacing:.14em;color:#FFFFFF}
+.pvd-hora b{font-size:28px;font-weight:900;line-height:1;color:#FFFFFF}
+.pvd-etiqueta{display:inline-block;background:#0B1530;color:#FFFFFF;font-size:13px;font-weight:800;letter-spacing:.16em;padding:5px 10px;margin:14px 0 4px;text-transform:uppercase}
+.pvd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin:4px 0 14px}
+.pvd-kpi{background:#FFFFFF;border:3px solid #0B1530;box-shadow:5px 5px 0 #0B1530;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.pvd-kpi small{font-size:11px;font-weight:800;letter-spacing:.14em;color:#0B1530}
+.pvd-kpi b{font-size:30px;font-weight:900;line-height:1.05;color:#0B1530}
+.pvd-kpi--cian{background:#27B4EA}
+.pvd-kpi--magenta{background:#B5006A}
+.pvd-kpi--magenta small,.pvd-kpi--magenta b{color:#FFFFFF}
+.pvd-login-titulo{background:#002D5A;border:3px solid #0B1530;box-shadow:7px 7px 0 #0B1530;padding:22px 20px 24px;margin:18px 0 22px}
+.pvd-login-titulo div{font-size:44px;font-weight:900;line-height:.92;text-transform:uppercase;color:#FFFFFF}
+.pvd-login-titulo span{color:#27B4EA}
+.pvd-total{background:#B5006A;border:3px solid #0B1530;box-shadow:7px 7px 0 #0B1530;padding:28px 24px;text-align:center;margin-top:12px}
+.pvd-total small{display:block;font-size:14px;font-weight:800;letter-spacing:.16em;color:#FFFFFF}
+.pvd-total b{display:block;font-size:76px;font-weight:900;line-height:1;color:#FFFFFF}
+@media (max-width:640px){.pvd-seccion span{font-size:26px}.pvd-login-titulo div{font-size:36px}.pvd-total b{font-size:54px}}
+</style>
+"""
+
+
+def _html(fragmento):
+    """Pinta HTML propio en una sola línea (sin sangrías ni renglones vacíos, para que
+    Markdown no lo convierta en bloque de código)."""
+    st.markdown(" ".join(l.strip() for l in fragmento.strip().splitlines() if l.strip()),
+                unsafe_allow_html=True)
+
+
+def logo_html(oscuro=False):
+    """Logo PVD: rombos en chevrón + PVD LOGÍSTICA."""
+    c1, c2, c3 = (CIAN, "#FFFFFF", CIAN) if oscuro else (CIAN, AZUL, AZUL_BARRA)
+    clase = "pvd-logo pvd-logo--oscuro" if oscuro else "pvd-logo"
+    return (f'<div class="{clase}"><svg width="22" height="26" viewBox="0 0 34 40" aria-hidden="true">'
+            f'<polygon points="10,3 15,8 10,13 5,8" fill="{c1}"/>'
+            f'<polygon points="18,9 23,14 18,19 13,14" fill="{c2}"/>'
+            f'<polygon points="26,15 31,20 26,25 21,20" fill="{c3}"/>'
+            f'<polygon points="18,21 23,26 18,31 13,26" fill="{c2}"/>'
+            f'<polygon points="10,27 15,32 10,37 5,32" fill="{c1}"/></svg>'
+            '<div class="pvd-logo-texto"><b>PVD</b><small>LOGÍSTICA</small></div></div>')
+
+
+_html(ESTILO_PVD)
 
 # 2. SISTEMA DE ACCESO
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
 if not st.session_state.autenticado:
-    st.title("🔐 Acceso PVD LOGÍSTICA")
-    clave = st.text_input("Contraseña:", type="password")
-    if st.button("Entrar"):
-        if clave == "MARSPET2026":
-            st.session_state.autenticado = True
-            st.rerun()
-        else:
-            st.error("Clave incorrecta")
+    _, centro, _ = st.columns([1, 1.3, 1])
+    with centro:
+        _html(f"""
+        <div style="margin-top:6vh">{logo_html()}</div>
+        <div class="pvd-login-titulo" role="heading" aria-level="1">
+        <div>Reporte de inventario y análisis de stock<span>.</span></div>
+        </div>
+        """)
+        with st.container(key="tarjeta_login"):
+            with st.form("form_login", border=False):
+                clave = st.text_input("Contraseña", type="password", placeholder="Escribe tu clave de acceso")
+                entrar = st.form_submit_button("Entrar", use_container_width=True)
+            if entrar:
+                if clave == "MARSPET2026":
+                    st.session_state.autenticado = True
+                    st.rerun()
+                else:
+                    st.error("Clave incorrecta")
     st.stop()
 
 # 3. CARGA DE DATOS (directo de Logify → "Nuevo Reportes", se refresca cada hora)
@@ -80,8 +163,69 @@ UBICACIONES = {
     "torreon":         ("Torreón",          "Coahuila",          25.54, -103.41),
     "veracruz":        ("Veracruz",         "Veracruz",          19.17,  -96.13),
     "villahermosa":    ("Villahermosa",     "Tabasco",           17.99,  -92.93),
+    # Otras ciudades, para que un almacén nuevo se ubique solo
+    "aguascalientes":  ("Aguascalientes",   "Aguascalientes",    21.88, -102.29),
+    "cancun":          ("Cancún",           "Quintana Roo",      21.16,  -86.85),
+    "chetumal":        ("Chetumal",         "Quintana Roo",      18.50,  -88.30),
+    "playa del carmen": ("Playa del Carmen", "Quintana Roo",     20.63,  -87.08),
+    "tuxtla":          ("Tuxtla Gutiérrez", "Chiapas",           16.75,  -93.12),
+    "tapachula":       ("Tapachula",        "Chiapas",           14.90,  -92.26),
+    "campeche":        ("Campeche",         "Campeche",          19.84,  -90.53),
+    "ciudad del carmen": ("Ciudad del Carmen", "Campeche",       18.65,  -91.82),
+    "ciudad juarez":   ("Ciudad Juárez",    "Chihuahua",         31.69, -106.42),
+    "cd juarez":       ("Ciudad Juárez",    "Chihuahua",         31.69, -106.42),
+    "saltillo":        ("Saltillo",         "Coahuila",          25.42, -101.00),
+    "colima":          ("Colima",           "Colima",            19.24, -103.72),
+    "manzanillo":      ("Manzanillo",       "Colima",            19.05, -104.32),
+    "durango":         ("Durango",          "Durango",           24.02, -104.66),
+    "celaya":          ("Celaya",           "Guanajuato",        20.52, -100.81),
+    "irapuato":        ("Irapuato",         "Guanajuato",        20.67, -101.35),
+    "chilpancingo":    ("Chilpancingo",     "Guerrero",          17.55,  -99.50),
+    "pachuca":         ("Pachuca",          "Hidalgo",           20.10,  -98.76),
+    "zapopan":         ("Zapopan",          "Jalisco",           20.72, -103.39),
+    "gdl":             ("Guadalajara",      "Jalisco",           20.67, -103.35),
+    "uruapan":         ("Uruapan",          "Michoacán",         19.42, -102.06),
+    "tepic":           ("Tepic",            "Nayarit",           21.50, -104.89),
+    "mty":             ("Monterrey",        "Nuevo León",        25.69, -100.32),
+    "qro":             ("Querétaro",        "Querétaro",         20.59, -100.39),
+    "slp":             ("San Luis Potosí",  "San Luis Potosí",   22.15, -100.98),
+    "mazatlan":        ("Mazatlán",         "Sinaloa",           23.25, -106.41),
+    "los mochis":      ("Los Mochis",       "Sinaloa",           25.79, -108.99),
+    "ciudad obregon":  ("Ciudad Obregón",   "Sonora",            27.48, -109.93),
+    "nogales":         ("Nogales",          "Sonora",            31.31, -110.94),
+    "reynosa":         ("Reynosa",          "Tamaulipas",        26.09,  -98.28),
+    "matamoros":       ("Matamoros",        "Tamaulipas",        25.87,  -97.50),
+    "nuevo laredo":    ("Nuevo Laredo",     "Tamaulipas",        27.48,  -99.52),
+    "ciudad victoria": ("Ciudad Victoria",  "Tamaulipas",        23.74,  -99.15),
+    "tlaxcala":        ("Tlaxcala",         "Tlaxcala",          19.31,  -98.24),
+    "xalapa":          ("Xalapa",           "Veracruz",          19.54,  -96.91),
+    "coatzacoalcos":   ("Coatzacoalcos",    "Veracruz",          18.13,  -94.46),
+    "zacatecas":       ("Zacatecas",        "Zacatecas",         22.77, -102.58),
+    "la paz":          ("La Paz",           "Baja California Sur", 24.14, -110.31),
+    "los cabos":       ("Los Cabos",        "Baja California Sur", 22.89, -109.91),
+    "ensenada":        ("Ensenada",         "Baja California",   31.87, -116.60),
+    "cdmx":            ("Ciudad de México", "Ciudad de México",  19.43,  -99.13),
 }
-_PATRONES = [(re.compile(rf"\b{re.escape(k)}\b"), v) for k, v in UBICACIONES.items()]
+
+# Si el almacén trae el ESTADO en el nombre (y no una ciudad de la lista), se ubica en el estado.
+ESTADOS = {
+    "Aguascalientes": (21.88, -102.28), "Baja California": (30.84, -115.28),
+    "Baja California Sur": (26.04, -111.66), "Campeche": (19.83, -90.53),
+    "Chiapas": (16.75, -93.12), "Chihuahua": (28.63, -106.06),
+    "Ciudad de México": (19.43, -99.13), "Coahuila": (27.05, -101.70),
+    "Colima": (19.24, -103.72), "Durango": (24.02, -104.65),
+    "Estado de México": (19.35, -99.10), "Guanajuato": (21.01, -101.25),
+    "Guerrero": (17.43, -99.54), "Hidalgo": (20.09, -98.76),
+    "Jalisco": (20.65, -103.34), "Michoacán": (19.70, -101.18),
+    "Morelos": (18.92, -99.23), "Nayarit": (21.50, -104.89),
+    "Nuevo León": (25.68, -100.31), "Oaxaca": (17.07, -96.72),
+    "Puebla": (19.04, -98.20), "Querétaro": (20.58, -100.38),
+    "Quintana Roo": (19.18, -88.47), "San Luis Potosí": (22.15, -100.98),
+    "Sinaloa": (24.80, -107.39), "Sonora": (29.07, -110.96),
+    "Tabasco": (17.84, -92.61), "Tamaulipas": (23.73, -99.14),
+    "Tlaxcala": (19.31, -98.23), "Veracruz": (19.17, -96.13),
+    "Yucatán": (20.96, -89.59), "Zacatecas": (22.77, -102.58),
+}
 _SIN_UBICACION = (None, None, float("nan"), float("nan"))
 
 
@@ -91,6 +235,16 @@ def _norm(valor):
         return ""
     texto = unicodedata.normalize("NFKD", str(valor)).encode("ascii", "ignore").decode("ascii")
     return " ".join(texto.lower().split())
+
+
+# Todas las claves (estados + ciudades). Una ciudad con el mismo nombre que su estado gana (Puebla, Oaxaca…).
+_CLAVES = {_norm(e): (e, e, lat, lon) for e, (lat, lon) in ESTADOS.items()}
+_CLAVES.update({"edomex": ("Estado de México", "Estado de México", 19.35, -99.10),
+                "edo mex": ("Estado de México", "Estado de México", 19.35, -99.10)})
+_CLAVES.update(UBICACIONES)
+# La clave más larga se revisa primero: "nuevo leon" antes que "leon", "baja california sur" antes que "baja california"
+_PATRONES = [(re.compile(rf"\b{re.escape(k)}\b"), v)
+             for k, v in sorted(_CLAVES.items(), key=lambda kv: -len(kv[0]))]
 
 
 def ubicar_almacen(nombre):
@@ -270,20 +424,140 @@ if not df_master.empty:
     if sin_ubicar:
         st.warning("Almacenes sin ubicación en el mapa (agrégalos a UBICACIONES): " + ", ".join(sin_ubicar))
 
-# 4. FUNCIÓN LIQUID FILL
+# 4. TANQUE DE PORCENTAJE (agua que sube y se mueve, estilo neo brutalista PVD)
 def draw_liquid_fill(percent):
-    level = 100 - percent
+    """El nivel del agua (magenta) es el % que la selección representa del inventario total.
+    La ola en zigzag se desplaza como agua; la cifra va en una etiqueta para leerse a cualquier nivel."""
+    nivel = max(0.0, min(100.0, percent))
+    # Ola en zigzag: se repite cada 50 unidades, así al recorrerse medio ancho no se nota el corte
+    cresta = " ".join(f"{x},{2 if (x // 25) % 2 else 8}" for x in range(0, 401, 25))
     return f"""
-    <div style="display: flex; justify-content: center; align-items: center; height: 260px;">
-        <div style="width: 200px; height: 200px; border-radius: 50%; border: 6px solid {AZUL_BARRA}; position: relative; overflow: hidden; background: #f0f0f0;">
-            <div style="position: absolute; width: 200%; height: 200%; top: {level}%; left: -50%; background: {MAGENTA}; border-radius: 40%; animation: wave_animation 5s linear infinite;"></div>
-            <div style="position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-family: 'Franklin Gothic Demi Cond', sans-serif; font-size: 42px; font-weight: bold; color: {'white' if percent > 55 else AZUL_BARRA}; z-index: 10;">
-                {percent:.1f}%
-            </div>
-        </div>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+body{{margin:0;background:transparent;font-family:'Jost',sans-serif;color:{TINTA}}}
+.envase{{display:flex;flex-direction:column;align-items:center;gap:14px;padding:8px 12px 14px}}
+.fila{{display:flex;align-items:stretch;gap:16px}}
+.tanque{{width:190px;height:220px;box-sizing:border-box;border:3px solid {TINTA};box-shadow:7px 7px 0 {TINTA};position:relative;overflow:hidden;background:#FFFFFF}}
+.linea{{position:absolute;left:0;right:0;border-top:2px dashed #C3D0E2}}
+.agua{{position:absolute;left:0;right:0;bottom:0;height:{nivel:.1f}%;background:{MAGENTA}}}
+.ola{{position:absolute;left:0;top:-11px;width:200%;height:12px;animation:ola 2.8s linear infinite}}
+.ola svg{{display:block;width:100%;height:12px}}
+@keyframes ola{{from{{transform:translateX(0)}}to{{transform:translateX(-50%)}}}}
+@media (prefers-reduced-motion:reduce){{.ola{{animation:none}}}}
+.cifra{{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-3deg);background:#FFFFFF;border:3px solid {TINTA};box-shadow:4px 4px 0 {TINTA};padding:4px 10px;font-size:38px;font-weight:900;line-height:1;white-space:nowrap;z-index:3}}
+.escala{{display:flex;flex-direction:column;justify-content:space-between;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;margin:-6px 0}}
+.rotulo{{background:{TINTA};color:#FFFFFF;font-size:12px;font-weight:800;letter-spacing:.14em;padding:4px 10px}}
+</style>
+<div class="envase">
+<div class="fila">
+<div class="tanque" role="img" aria-label="{percent:.1f}% del inventario total">
+<div class="linea" style="top:25%"></div><div class="linea" style="top:50%"></div><div class="linea" style="top:75%"></div>
+<div class="agua"><div class="ola"><svg viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true">
+<polygon points="0,12 {cresta} 400,12" fill="{MAGENTA}"/>
+<polyline points="{cresta}" fill="none" stroke="{TINTA}" stroke-width="3" vector-effect="non-scaling-stroke"/>
+</svg></div></div>
+<div class="cifra">{percent:.1f}%</div>
+</div>
+<div class="escala" aria-hidden="true"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
+</div>
+<div class="rotulo">DEL INVENTARIO TOTAL</div>
+</div>
+"""
+
+
+def encabezado(seccion):
+    """Barra superior de cada sección: logo, nombre de la sección y hora de la última carga."""
+    hora = (f'<div class="pvd-hora"><small>ACTUALIZADO</small><b>{actualizado:%H:%M}</b></div>'
+            if actualizado is not None else "")
+    _html(f"""
+    <div class="pvd-encabezado">
+    {logo_html()}
+    <div class="pvd-seccion" role="heading" aria-level="1"><small>REPORTE DE INVENTARIO Y ANÁLISIS DE STOCK</small><span>{seccion}</span></div>
+    {hora}
     </div>
-    <style> @keyframes wave_animation {{ from {{ transform: rotate(0deg); }} to {{ transform: rotate(360deg); }} }} </style>
-    """
+    """)
+
+
+def etiqueta(texto):
+    """Título de bloque: etiqueta negra con letras blancas."""
+    _html(f'<div class="pvd-etiqueta">{texto}</div>')
+
+
+def kpis(tarjetas):
+    """Fila de indicadores: [(título, valor, variante)] con variante '', 'cian' o 'magenta'."""
+    _html('<div class="pvd-kpis">' + "".join(
+        f'<div class="pvd-kpi{" pvd-kpi--" + v if v else ""}"><small>{t}</small><b>{valor}</b></div>'
+        for t, valor, v in tarjetas) + '</div>')
+
+
+def estilo_grafica(fig):
+    """Gráficas con la tipografía y colores PVD."""
+    fig.update_layout(font=dict(family="Jost, sans-serif", color=TINTA, size=13),
+                      paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
+                      margin=dict(l=8, r=8, t=8, b=8))
+    fig.update_xaxes(gridcolor="#E4EBF4", zerolinecolor=TINTA)
+    fig.update_yaxes(gridcolor="#E4EBF4", zerolinecolor=TINTA)
+    return fig
+
+
+def dibujar_cobertura(df):
+    """Mapa de cobertura: cada almacén se ubica por la ciudad o el estado que trae en su nombre.
+    Es un mapa dibujado por Plotly (sin Mapbox ni servicios de mapas externos)."""
+    ubicados = df.dropna(subset=["lat_i", "lon_i"])
+    sin_ubicar = sorted(df.loc[df["lat_i"].isna(), "Nombre"].dropna().astype(str).unique())
+    kpis([("Estados", f"{ubicados['Estado'].nunique()}", "cian"),
+          ("Ciudades", f"{ubicados['Ciudad'].nunique()}", ""),
+          ("Almacenes", f"{ubicados['Nombre'].nunique()}", "")])
+    if ubicados.empty:
+        st.info("Ningún almacén de este filtro tiene ubicación.")
+        return
+
+    # Una burbuja por ciudad (Monterrey DTS + Monterrey PVD se suman)
+    puntos = (ubicados.groupby(["Ciudad", "Estado", "lat_i", "lon_i"], as_index=False, dropna=False)
+              .agg(Disponible=("Disponible", "sum"),
+                   Almacenes=("Nombre", lambda s: ", ".join(sorted(s.astype(str).unique())))))
+    # El tamaño no acepta negativos; 'sizemin' hace que hasta el almacén más chico se vea
+    puntos["Tamaño"] = puntos["Disponible"].clip(lower=0)
+    if puntos["Tamaño"].max() == 0:
+        puntos["Tamaño"] = 1
+    # Color por nivel (Vallejo es tan grande que una escala continua pintaría todo igual)
+    if len(puntos) >= 3:
+        puntos["Nivel"] = pd.qcut(puntos["Disponible"].rank(method="first"), 3,
+                                  labels=["Bajo", "Medio", "Alto"]).astype(str)
+    else:
+        puntos["Nivel"] = "Alto"
+
+    fig = px.scatter_geo(
+        puntos, lat="lat_i", lon="lon_i", size="Tamaño", color="Nivel",
+        color_discrete_map={"Alto": MAGENTA, "Medio": AZUL, "Bajo": CIAN},
+        category_orders={"Nivel": ["Alto", "Medio", "Bajo"]},
+        hover_name="Ciudad",
+        hover_data={"Estado": True, "Almacenes": True, "Disponible": ":,.0f",
+                    "Tamaño": False, "Nivel": False, "lat_i": False, "lon_i": False},
+        size_max=34, height=400,
+    )
+    fig.update_traces(marker=dict(line=dict(color=TINTA, width=2), opacity=1, sizemin=8))
+    # México en blanco con borde grueso; el resto del continente en gris
+    mexico = go.Choropleth(locations=["MEX"], locationmode="ISO-3", z=[1],
+                           colorscale=[[0, "#FFFFFF"], [1, "#FFFFFF"]], showscale=False,
+                           marker_line_color=TINTA, marker_line_width=3, hoverinfo="skip")
+    fig.add_trace(mexico)
+    fig.data = (fig.data[-1],) + fig.data[:-1]  # México abajo, burbujas encima
+    fig.update_geos(
+        projection_type="mercator", lataxis_range=[13.5, 34], lonaxis_range=[-119, -85.5],
+        resolution=50, showland=True, landcolor="#DCE4EE", showocean=True, oceancolor="#EEF3F9",
+        showlakes=False, showcountries=True, countrycolor=TINTA, countrywidth=1.5,
+        showcoastlines=True, coastlinecolor=TINTA, coastlinewidth=1.5,
+        showframe=True, framecolor=TINTA, framewidth=3, bgcolor="#FFFFFF",
+    )
+    estilo_grafica(fig).update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        legend=dict(title_text="Inventario", orientation="h", yanchor="bottom", y=0.02,
+                    xanchor="left", x=0.02, bgcolor="#FFFFFF", bordercolor=TINTA, borderwidth=2),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    if sin_ubicar:
+        st.caption("Sin ubicar (agrégalos a UBICACIONES): " + ", ".join(sin_ubicar))
 
 # 5. FUNCIÓN AUXILIAR SELECTBOX
 def get_options(df, column_name, first_option="Todas"):
@@ -333,12 +607,14 @@ def abrir_foto_pendiente(df_vista):
         st.toast("Este producto no tiene foto en Logify.")
 
 # 6. MENÚ LATERAL
+SECCIONES = ["Gestión de inventario", "Nuevas campañas", "Análisis 360"]
+
 with st.sidebar:
-    st.header("PVD LOGÍSTICA")
-    menu = st.radio("Sección del Sistema:", ["📦 Gestión de Inventario", "✨ Nuevas Campañas", "📊 Análisis 360"])
+    _html(logo_html(oscuro=True))
+    menu = st.radio("Menú", SECCIONES, format_func=lambda s: f"{SECCIONES.index(s) + 1:02d} · {s}")
     if actualizado is not None:
         st.caption(f"Inventario Logify · actualizado {actualizado:%d/%m/%Y %H:%M}")
-    if st.button("🔄 Actualizar ahora"):
+    if st.button("Actualizar ahora", key="btn_actualizar", use_container_width=True):
         # Freno: entre actualizaciones deben pasar al menos ESPERA_BOTON (cuenta para todos los usuarios)
         siguiente = actualizado + timedelta(seconds=ESPERA_BOTON) if actualizado else None
         if siguiente and datetime.now(HORA_MX) < siguiente:
@@ -347,15 +623,16 @@ with st.sidebar:
         else:
             load_data.clear()
             st.rerun()
-    if st.button("Cerrar Sesión"):
+    if st.button("Cerrar sesión", key="btn_salir", use_container_width=True):
         st.session_state.autenticado = False
         st.rerun()
 
 # 7. VISTA: GESTIÓN DE INVENTARIO
-if menu == "📦 Gestión de Inventario":
-    st.title("📦 Gestión de Inventario")
+if menu == SECCIONES[0]:
+    encabezado("Gestión de inventario")
 
     if not df_master.empty:
+        etiqueta("Filtros")
         r1c1, r1c2 = st.columns([1, 2])
         with r1c1:
             sel_alm = st.selectbox("Almacén", get_options(df_master, 'Nombre'))
@@ -379,7 +656,15 @@ if menu == "📦 Gestión de Inventario":
         if sel_ca != "Todas": df_t = df_t[df_t['Campaña'].astype(str) == sel_ca]
         if sel_cn != "Todas": df_t = df_t[df_t['Canal'].astype(str) == sel_cn]
 
-        cols_t = ['código', 'Descripción', 'Foto', 'Disponible', 'Apartados', 'Total', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
+        etiqueta("Inventario")
+        kpis([
+            ("Renglones", f"{len(df_t):,}", ""),
+            ("Productos", f"{df_t['código'].nunique():,}", ""),
+            ("Disponible", f"{df_t['Disponible'].sum():,.0f}", "cian"),
+            ("Apartados", f"{df_t['Apartados'].sum():,.0f}", "magenta"),
+        ])
+
+        cols_t =['código', 'Descripción', 'Foto', 'Disponible', 'Apartados', 'Total', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
         cols_validas = [c for c in cols_t if c in df_t.columns]
 
         # En pantalla, 📷 solo indica que hay foto; la liga (columna Foto) queda oculta.
@@ -403,18 +688,19 @@ if menu == "📦 Gestión de Inventario":
             },
         )
         abrir_foto_pendiente(df_vista)
-        st.download_button("📥 Reporte CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
+        st.download_button("Descargar CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
 # 8. VISTA: NUEVAS CAMPAÑAS
-elif menu == "✨ Nuevas Campañas":
-    st.title("✨ Nuevas Campañas")
-    st.info("📦 Sección en preparación.")
+elif menu == SECCIONES[1]:
+    encabezado("Nuevas campañas")
+    st.info("Sección en preparación.")
 
 # 9. VISTA: ANÁLISIS 360
 else:
-    st.title("📊 Análisis 360 - Dashboard")
+    encabezado("Análisis 360")
 
     if not df_master.empty:
+        etiqueta("Filtros")
         c1, c2 = st.columns(2)
         with c1: canal_d = st.selectbox("Canal Dashboard", get_options(df_master, 'Canal', "Todos"))
         with c2: camp_d = st.selectbox("Campaña Dashboard", get_options(df_master, 'Campaña'))
@@ -424,76 +710,62 @@ else:
         if camp_d != "Todas": df_d = df_d[df_d['Campaña'].astype(str) == camp_d]
 
         # KPIs
+        etiqueta("Resumen")
         col_dash1, col_dash2 = st.columns([1, 2])
         with col_dash1:
             total_g = df_master['Disponible'].sum() if 'Disponible' in df_master.columns else 0
             total_f = df_d['Disponible'].sum() if 'Disponible' in df_d.columns else 0
             porc = (total_f / total_g * 100) if total_g > 0 else 0
-            st.components.v1.html(draw_liquid_fill(porc), height=280)
+            st.components.v1.html(draw_liquid_fill(porc), height=300)
 
         with col_dash2:
-            st.markdown(f"""<div style='text-align:center; padding:45px; background:{MAGENTA}; border-radius:15px; color:white; margin-top:20px;'><p style='margin:0; font-size:20px;'>Inventario Disponible</p><h1 style='font-size: 80px; margin:0;'>{total_f:,.0f}</h1></div>""", unsafe_allow_html=True)
+            _html(f'<div class="pvd-total"><small>INVENTARIO DISPONIBLE</small><b>{total_f:,.0f}</b></div>')
 
-        st.markdown("---")
-        g1, g2, g3 = st.columns(3)
+        # Mapa ancho (cobertura) + ranking de almacenes al lado; campañas abajo a todo lo ancho
+        g1, g2 = st.columns([3, 2])
 
         with g1:
-            st.subheader("🗺️ Cobertura")
-            df_mapa = df_d.dropna(subset=['lat_i', 'lon_i'])
-            if not df_mapa.empty:
-                # Una burbuja por ciudad (Monterrey DTS + Monterrey PVD se suman)
-                df_mapa = (
-                    df_mapa.groupby(['Ciudad', 'Estado', 'lat_i', 'lon_i'], as_index=False, dropna=False)
-                    .agg(Disponible=('Disponible', 'sum'),
-                         Almacenes=('Nombre', lambda s: ', '.join(sorted(s.astype(str).unique()))))
-                )
-                # El tamaño de la burbuja no acepta negativos (hay ajustes con Disponible < 0)
-                df_mapa['Tamaño'] = df_mapa['Disponible'].clip(lower=0)
-                if df_mapa['Tamaño'].max() == 0:
-                    df_mapa['Tamaño'] = 1
+            etiqueta("Cobertura")
+            with st.container(key="tarjeta_mapa"):
                 try:
-                    fig_map = px.scatter_mapbox(
-                        df_mapa, lat="lat_i", lon="lon_i", size="Tamaño", color="Disponible",
-                        hover_name="Ciudad",
-                        hover_data={"Estado": True, "Almacenes": True, "Disponible": True,
-                                    "Tamaño": False, "lat_i": False, "lon_i": False},
-                        color_continuous_scale=[AZUL_BARRA, MAGENTA], size_max=30,
-                        center={"lat": 23.6, "lon": -102.5}, zoom=3.3,
-                        mapbox_style="carto-positron", height=300,
-                    )
-                    fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
-                    st.plotly_chart(fig_map, use_container_width=True)
+                    dibujar_cobertura(df_d)
                 except Exception as e:
                     st.warning(f"No se pudo dibujar el mapa: {e}")
-            else: st.info("No hay coordenadas para graficar.")
 
         with g2:
-            st.subheader("📊 Almacenes")
+            etiqueta("Almacenes")
+            tarjeta_alm = st.container(key="tarjeta_almacenes")
             if 'Nombre' in df_d.columns and not df_d.empty:
                 df_rank = df_d.groupby('Nombre')['Disponible'].sum().reset_index().sort_values('Disponible')
                 if not df_rank.empty:
-                    fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h', height=300)
-                    st.plotly_chart(fig_bar, use_container_width=True)
+                    fig_bar = px.bar(df_rank, x="Disponible", y="Nombre", orientation='h',
+                                     height=max(360, 24 * len(df_rank)))
+                    fig_bar.update_traces(marker_color=AZUL, marker_line_color=TINTA, marker_line_width=2)
+                    tarjeta_alm.plotly_chart(estilo_grafica(fig_bar), use_container_width=True)
+            else:
+                tarjeta_alm.info("Sin datos para este filtro.")
 
-        with g3:
-            st.subheader("🟣 Campaña")
-            if not df_d.empty and {'Campaña', 'Canal', 'Disponible'}.issubset(df_d.columns):
-                # Un punto por Campaña + Canal con su total (en vez de un punto por renglón)
-                df_camp = df_d.groupby(['Campaña', 'Canal'], as_index=False)['Disponible'].sum()
-                # El tamaño no acepta negativos: sin existencia = sin burbuja
-                df_camp['Tamaño'] = df_camp['Disponible'].clip(lower=0)
-                if df_camp.empty:
-                    st.info("Datos insuficientes para dispersión.")
-                else:
-                    if df_camp['Tamaño'].max() == 0:
-                        df_camp['Tamaño'] = 1
-                    try:
-                        fig_scat = px.scatter(
-                            df_camp, x="Campaña", y="Canal", size="Tamaño",
-                            hover_data={"Disponible": True, "Tamaño": False},
-                            color_discrete_sequence=[MAGENTA], size_max=30, height=300,
-                        )
-                        st.plotly_chart(fig_scat, use_container_width=True)
-                    except Exception as e:
-                        st.warning(f"No se pudo dibujar la gráfica: {e}")
-            else: st.info("Datos insuficientes para dispersión.")
+        etiqueta("Campaña")
+        tarjeta_camp = st.container(key="tarjeta_campana")
+        if not df_d.empty and {'Campaña', 'Canal', 'Disponible'}.issubset(df_d.columns):
+            # Un punto por Campaña + Canal con su total (en vez de un punto por renglón)
+            df_camp = df_d.groupby(['Campaña', 'Canal'], as_index=False)['Disponible'].sum()
+            # El tamaño no acepta negativos: sin existencia = sin burbuja
+            df_camp['Tamaño'] = df_camp['Disponible'].clip(lower=0)
+            if df_camp.empty:
+                tarjeta_camp.info("Datos insuficientes para dispersión.")
+            else:
+                if df_camp['Tamaño'].max() == 0:
+                    df_camp['Tamaño'] = 1
+                try:
+                    fig_scat = px.scatter(
+                        df_camp, x="Campaña", y="Canal", size="Tamaño",
+                        hover_data={"Disponible": True, "Tamaño": False},
+                        color_discrete_sequence=[MAGENTA], size_max=30, height=340,
+                    )
+                    fig_scat.update_traces(marker=dict(line=dict(color=TINTA, width=2)))
+                    tarjeta_camp.plotly_chart(estilo_grafica(fig_scat), use_container_width=True)
+                except Exception as e:
+                    tarjeta_camp.warning(f"No se pudo dibujar la gráfica: {e}")
+        else:
+            tarjeta_camp.info("Datos insuficientes para dispersión.")
