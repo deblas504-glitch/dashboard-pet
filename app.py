@@ -573,17 +573,17 @@ CLIC_EN_CELDA = Version(st.__version__) >= Version("1.49.0")
 
 @st.dialog("Foto del producto", width="large")
 def ver_foto(fila):
-    st.image(fila["Foto"])
+    st.image(fila["url_foto"])
     st.markdown(f"**{fila['código']}** · {fila['Descripción']}")
     st.caption(f"{fila['Nombre']} · {fila['Canal']} · Disponible: {fila['Disponible']:,.0f}")
-    st.link_button("Abrir imagen original", fila["Foto"])
+    st.link_button("Abrir imagen original", fila["url_foto"])
 
 
 def _al_seleccionar_foto():
     """Se ejecuta al dar clic en la tabla: anota qué foto abrir y limpia la selección,
-    para que el mismo 📷 se pueda volver a abrir después de cerrar la ventana."""
+    para que el mismo ◉ VER se pueda volver a abrir después de cerrar la ventana."""
     seleccion = st.session_state.get("tabla_inventario", {}).get("selection", {})
-    celdas = [fila for fila, columna in seleccion.get("cells", []) if columna == "📷"]
+    celdas = [fila for fila, columna in seleccion.get("cells", []) if columna == "Foto"]
     filas = list(seleccion.get("rows", []))
     destino = celdas[0] if celdas else (filas[0] if filas else None)
     if destino is None:
@@ -601,7 +601,7 @@ def abrir_foto_pendiente(df_vista):
     if destino is None or destino >= len(df_vista):
         return
     fila = df_vista.iloc[destino]
-    if pd.notna(fila.get("Foto")):
+    if pd.notna(fila.get("url_foto")):
         ver_foto(fila)
     else:
         st.toast("Este producto no tiene foto en Logify.")
@@ -667,24 +667,42 @@ if menu == SECCIONES[0]:
         cols_t =['código', 'Descripción', 'Foto', 'Disponible', 'Apartados', 'Total', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación', 'Campaña', 'Estado de material', 'AÑO', 'Unidad']
         cols_validas = [c for c in cols_t if c in df_t.columns]
 
-        # En pantalla, 📷 solo indica que hay foto; la liga (columna Foto) queda oculta.
-        # El CSV de abajo sí incluye la liga.
-        df_vista = df_t[cols_validas].reset_index(drop=True)
-        df_vista.insert(df_vista.columns.get_loc('Foto'), '📷',
-                        df_vista['Foto'].notna().map({True: '📷', False: ''}))
+        # En pantalla, la columna Foto solo dice "◉ VER" cuando hay foto; la liga queda oculta
+        # (url_foto). El CSV de abajo sí incluye la liga.
+        df_vista = df_t[cols_validas].reset_index(drop=True).rename(columns={'Foto': 'url_foto'})
+        df_vista.insert(df_vista.columns.get_loc('url_foto'), 'Foto',
+                        df_vista['url_foto'].notna().map({True: '◉ VER', False: ''}))
+        # Textos vacíos de Logify: una raya en lugar de "None"
+        for col in ['Descripción', 'Nombre', 'Ciudad', 'Estado', 'Canal', 'Clasificación',
+                    'Campaña', 'Estado de material']:
+            if col in df_vista.columns:
+                df_vista[col] = df_vista[col].fillna('—')
+
+        # Toque PVD en las celdas: VER en azul, existencias en cero o negativas en magenta,
+        # miles con coma. Si el servidor no tiene el motor de estilos, se muestra la tabla normal.
+        try:
+            tabla = (df_vista.style
+                     .map(lambda v: f'color: {AZUL}; font-weight: 700' if v else '', subset=['Foto'])
+                     .map(lambda v: f'color: {MAGENTA}; font-weight: 700' if pd.notna(v) and v <= 0 else '',
+                          subset=['Disponible'])
+                     .format('{:,.0f}', subset=[c for c in ['Disponible', 'Apartados', 'Total']
+                                                if c in df_vista.columns])
+                     .format(na_rep='—', subset=[c for c in ['AÑO'] if c in df_vista.columns]))
+        except Exception:
+            tabla = df_vista
 
         if CLIC_EN_CELDA:
-            st.caption("📷 Da clic en la camarita de un producto para ver su foto en grande.")
+            st.caption("◉ Da clic en VER para ver la foto del producto en grande.")
         else:
-            st.caption("📷 Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
+            st.caption("◉ Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
         st.dataframe(
-            df_vista, use_container_width=True, hide_index=True,
+            tabla, use_container_width=True, hide_index=True,
             on_select=_al_seleccionar_foto, key="tabla_inventario",
             selection_mode=["single-row", "single-cell"] if CLIC_EN_CELDA else "single-row",
             column_config={
-                "Foto": None,
-                "📷": st.column_config.TextColumn("📷", width="small",
-                                                  help="Da clic para ver la foto en grande"),
+                "url_foto": None,
+                "Foto": st.column_config.TextColumn("Foto", width="small",
+                                                    help="Da clic en VER para ver la foto en grande"),
             },
         )
         abrir_foto_pendiente(df_vista)
