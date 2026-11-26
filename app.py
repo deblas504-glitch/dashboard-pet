@@ -575,8 +575,9 @@ CLIC_EN_CELDA = Version(st.__version__) >= Version("1.49.0")
 _SVG_CAMARITA = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 24">'
     '<rect x="11" y="2" width="10" height="5" fill="#0B1530"/>'
-    '<rect x="2.5" y="5.5" width="27" height="16" fill="#27B4EA" stroke="#0B1530" stroke-width="3"/>'
-    '<circle cx="16" cy="13.5" r="5" fill="#B5006A" stroke="#0B1530" stroke-width="3"/>'
+    '<rect x="2.5" y="5.5" width="27" height="16" fill="#FFFFFF" stroke="#0B1530" stroke-width="3"/>'
+    '<circle cx="16" cy="13.5" r="5" fill="#0B1530"/>'
+    '<circle cx="16" cy="13.5" r="2" fill="#FFFFFF"/>'
     '<rect x="23" y="8.5" width="3" height="2.5" fill="#0B1530"/></svg>'
 )
 CAMARITA = "data:image/svg+xml;base64," + base64.b64encode(_SVG_CAMARITA.encode()).decode()
@@ -594,7 +595,9 @@ def _al_seleccionar_foto():
     """Se ejecuta al dar clic en la tabla: anota qué foto abrir y limpia la selección,
     para que el mismo ◉ VER se pueda volver a abrir después de cerrar la ventana."""
     seleccion = st.session_state.get("tabla_inventario", {}).get("selection", {})
-    celdas = [fila for fila, columna in seleccion.get("cells", []) if columna == "Foto"]
+    # Streamlit abre su propia vista previa al tocar una imagen de la tabla, así que la foto
+    # se abre con clic en la camarita o en el código del producto.
+    celdas = [fila for fila, columna in seleccion.get("cells", []) if columna in ("Foto", "código")]
     filas = list(seleccion.get("rows", []))
     destino = celdas[0] if celdas else (filas[0] if filas else None)
     if destino is None:
@@ -702,19 +705,23 @@ if menu == SECCIONES[0]:
             tabla = df_vista
 
         if CLIC_EN_CELDA:
-            st.caption("Da clic en la camarita de un producto para ver su foto en grande.")
+            st.caption("Da clic en el código del producto para ver su foto en grande (la camarita indica que tiene foto).")
         else:
             st.caption("Marca la casilla de un producto (a la izquierda) para ver su foto en grande.")
-        st.dataframe(
-            tabla, use_container_width=True, hide_index=True,
+        opciones_tabla = dict(
+            use_container_width=True, hide_index=True,
             on_select=_al_seleccionar_foto, key="tabla_inventario",
             selection_mode=["single-row", "single-cell"] if CLIC_EN_CELDA else "single-row",
             column_config={
                 "url_foto": None,
                 "Foto": st.column_config.ImageColumn("Foto", width="small",
-                                                     help="Da clic en la camarita para ver la foto en grande"),
+                                                     help="Tiene foto: da clic en el código para verla"),
             },
         )
+        try:
+            st.dataframe(tabla, placeholder="", **opciones_tabla)  # celdas vacías sin "None"
+        except TypeError:
+            st.dataframe(tabla, **opciones_tabla)  # versiones sin 'placeholder'
         abrir_foto_pendiente(df_vista)
         st.download_button("Descargar CSV", df_t[cols_validas].to_csv(index=False).encode('utf-8'), "inventario.csv", "text/csv")
 
